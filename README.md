@@ -1,4 +1,4 @@
-# plane-spotter
+# In Plane Sight
 
 ## Kurzbeschreibung
 
