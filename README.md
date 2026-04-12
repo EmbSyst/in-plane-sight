@@ -25,7 +25,7 @@ Unter [backend/](backend/) liegt ein schlankes FastAPI-Backend, das:
 - die Daten als REST-API für das Touch-Frontend bereitstellt
 - bei Auswahl eines Flugzeugs dessen `lat/lon` modular an den Holo Globe weiterleitet (HTTP oder UDP, per ENV konfigurierbar)
 
-Architekturdiagramm (Mermaid): [architecture.mmd](architecture.mmd)
+Architekturdiagramm (Mermaid): [architecture.md](architecture.md)
 
 ### Start (Development)
 
