@@ -1,0 +1,4 @@
+# Python dependencies for the RasPi local web application (backend + API + integrations).
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.27

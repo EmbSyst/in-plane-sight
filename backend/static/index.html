@@ -1,0 +1,32 @@
+<!doctype html>
+<!--
+  Touch-friendly kiosk UI for the Raspberry Pi.
+
+  This page is served by the FastAPI backend and uses /static/app.js to poll
+  /api/aircraft and to send selections to /api/select.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>In Plane Sight</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">In Plane Sight</div>
+      <div class="status" id="status">Connecting…</div>
+    </header>
+
+    <main class="main">
+      <section class="hint">
+        Tap an aircraft to forward its position (lat/lon) to the Holo Globe.
+      </section>
+      <section class="grid" id="grid"></section>
+    </main>
+
+    <div class="toast" id="toast" aria-live="polite"></div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
