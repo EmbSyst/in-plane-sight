@@ -15,7 +15,7 @@ flowchart LR
     Dump1090["dump1090\nhttp://127.0.0.1:8080/data/aircraft.json"]
   end
 
-  subgraph Globe["Holo Globe Microcontroller (ESP32)"]
+  subgraph Globe["Holo Globe Microcontroller"]
     MCU["Microcontroller\n(HTTP endpoint or UDP listener)"]
   end
 
