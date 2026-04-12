@@ -30,7 +30,7 @@ class TestEnvUtils(unittest.TestCase):
 
     def test_get_env_returns_stripped_value(self) -> None:
         os.environ["X_TEST_VALUE"] = "  hello  "
-        self.assertEqual(get_env("X_TEST_VALUE", "fallback"), "  hello  ")
+        self.assertEqual(get_env("X_TEST_VALUE", "fallback"), "hello")
 
     def test_get_env_float_parses_valid(self) -> None:
         os.environ["X_TEST_FLOAT"] = "1.25"
@@ -47,4 +47,3 @@ class TestEnvUtils(unittest.TestCase):
     def test_get_env_int_falls_back_on_invalid(self) -> None:
         os.environ["X_TEST_INT_BAD"] = "4.2"
         self.assertEqual(get_env_int("X_TEST_INT_BAD", 7), 7)
-

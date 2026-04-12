@@ -11,9 +11,17 @@ import os
 
 
 def get_env(name: str, default: str) -> str:
-    """Return an environment variable value, falling back to default if unset/blank."""
+    """
+    Return an environment variable value, falling back to default if unset/blank.
+
+    The returned value is stripped to avoid subtle configuration issues caused by
+    leading/trailing whitespace in shell exports.
+    """
     value = os.getenv(name)
-    return value if value is not None and value.strip() != "" else default
+    if value is None:
+        return default
+    stripped = value.strip()
+    return stripped if stripped != "" else default
 
 
 def get_env_float(name: str, default: float) -> float:
@@ -32,4 +40,3 @@ def get_env_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         return default
-
