@@ -24,6 +24,7 @@ Unter [backend/](backend/) liegt ein schlankes FastAPI-Backend, das:
 - live Aircraft-Daten von `dump1090` pollt (`http://127.0.0.1:8080/data/aircraft.json`)
 - die Daten als REST-API für das Touch-Frontend bereitstellt
 - bei Auswahl eines Flugzeugs dessen `lat/lon` modular an den Holo Globe weiterleitet (HTTP oder UDP, per ENV konfigurierbar)
+- bei Auswahl eines Flugzeugs Metadaten und ein Foto über die Planespotters API nachlädt (inkl. Cache & Placeholder)
 
 Architekturdiagramm (Mermaid): [architecture.md](architecture.md)
 
@@ -40,7 +41,7 @@ Danach im Browser öffnen: `http://<raspi-ip>:8000/`
 
 ### Start (mit Startskript)
 
-Für einen einfachen Start inkl. Standard-Exports gibt es [start.sh](file:///Users/noakaehling/Documents/Hochschule/Semester6/EmbeddedSystems/in-plane-sight/start.sh):
+Für einen einfachen Start inkl. Standard-Exports gibt es [start.sh](start.sh):
 
 ```bash
 chmod +x start.sh
@@ -62,3 +63,12 @@ python3 -m unittest discover -s backend/tests -p "test_*.py"
 ```
 
 Hinweis: Einige Tests werden automatisch übersprungen, wenn Abhängigkeiten wie `fastapi/httpx/pydantic` in der aktuellen Umgebung nicht installiert sind.
+
+### Aircraft-Metadaten (Planespotters)
+
+Beim Tap auf ein Flugzeug ruft das Backend zusätzlich die Planespotters API anhand des `hex` Codes auf und liefert `type`, `airline`, `photographer` sowie eine Bild-URL zurück. Um Rate-Limits zu vermeiden, werden Ergebnisse pro `hex` im Backend gecacht; bei fehlendem Internet/keinen Fotos wird ein Placeholder-Bild genutzt.
+
+Optionale Umgebungsvariablen:
+
+- `PLANESPOTTERS_BASE_URL` (Default: `https://api.planespotters.net/pub/photos/hex`)
+- `PLANESPOTTERS_TIMEOUT_S` (Default: `2.0`)

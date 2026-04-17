@@ -8,11 +8,16 @@ flowchart LR
     Poller["Background Poller\npolls dump1090 every 1s"]
     Cache["In-memory Cache\nDump1090State"]
     DumpClient["Dump1090Client\nHTTP GET aircraft.json"]
+    MetaSvc["Planespotters Metadata\n(in-memory cache by hex)"]
     GlobeSvc["Globe Forwarding Service\nHTTP or UDP (ENV)"]
   end
 
   subgraph SDR["SDR Receiver Stack"]
     Dump1090["dump1090\nhttp://127.0.0.1:8080/data/aircraft.json"]
+  end
+
+  subgraph Internet["Internet (optional)"]
+    Planespotters["Planespotters API\n/photos/hex/{hex}"]
   end
 
   subgraph Globe["Holo Globe Microcontroller"]
@@ -27,6 +32,9 @@ flowchart LR
   Poller --> Cache
   Poller --> DumpClient
   DumpClient -->|"HTTP GET"| Dump1090
+
+  API -->|"on selection\n(fetch meta + cache)"| MetaSvc
+  MetaSvc -->|"HTTP GET (cached)"| Planespotters
 
   API -->|"on selection"| GlobeSvc
   GlobeSvc -->|"HTTP POST or UDP JSON\n{hex,flight,lat,lon,altitude,speed}"| MCU
