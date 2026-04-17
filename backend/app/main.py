@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from .models import AircraftListResponse, SelectRequest, SelectResponse
 from .services.dump1090 import Dump1090Client
 from .services.globe import forward_to_globe
+from .services.planespotters import get_aircraft_metadata
 from .state import Dump1090State
 from .utils import get_env, get_env_float
 
@@ -152,7 +153,8 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="aircraft not found")
 
         forward_result = await forward_to_globe(selected)
-        return SelectResponse(ok=forward_result.sent, selected=selected, forward=forward_result)
+        meta = await get_aircraft_metadata(selected.hex)
+        return SelectResponse(ok=forward_result.sent, selected=selected, forward=forward_result, meta=meta)
 
     return app
 

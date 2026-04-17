@@ -40,6 +40,18 @@ class SelectRequest(BaseModel):
     hex: str = Field(..., description="ICAO address (hex) of the aircraft to select")
 
 
+class AircraftMetadata(BaseModel):
+    """Metadata for an aircraft, enriched via external APIs (e.g. Planespotters)."""
+
+    hex: str = Field(..., description="ICAO address (hex) this metadata refers to")
+    type: str | None = Field(default=None, description="Aircraft model/type")
+    airline: str | None = Field(default=None, description="Operating airline")
+    photographer: str | None = Field(default=None, description="Photographer credit")
+    image_url: str | None = Field(default=None, description="URL of aircraft image")
+    from_cache: bool = Field(default=False, description="True if returned from in-memory cache")
+    placeholder: bool = Field(default=False, description="True if using a generic placeholder image")
+
+
 class GlobeForwardResult(BaseModel):
     """Result of forwarding the selected aircraft to the globe integration."""
 
@@ -55,3 +67,4 @@ class SelectResponse(BaseModel):
     ok: bool
     selected: Aircraft | None
     forward: GlobeForwardResult
+    meta: AircraftMetadata | None = None
