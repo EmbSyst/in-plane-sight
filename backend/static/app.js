@@ -8,6 +8,7 @@
 */
 
 const POLL_INTERVAL_MS = 1000;
+const PLACEHOLDER_IMG = "/static/aircraft-placeholder.svg";
 
 function $(id) {
   const el = document.getElementById(id);
@@ -58,6 +59,67 @@ async function selectAircraft(hex) {
     throw new Error(detail);
   }
   return data;
+}
+
+function renderDetails(selected, meta) {
+  const details = $("details");
+  if (!selected) {
+    details.replaceChildren();
+    return;
+  }
+
+  const hex = String(selected.hex || "").toUpperCase();
+  const flight = normalizeFlight(selected.flight, selected.hex);
+
+  const imageUrl = meta && meta.image_url ? String(meta.image_url) : PLACEHOLDER_IMG;
+  const type = meta && meta.type ? String(meta.type) : "Unknown type";
+  const airline = meta && meta.airline ? String(meta.airline) : "Unknown airline";
+  const photographer = meta && meta.photographer ? String(meta.photographer) : "Unknown photographer";
+  const cacheNote = meta && meta.from_cache ? "cached" : "fresh";
+
+  const card = document.createElement("div");
+  card.className = "detailsCard";
+
+  const img = document.createElement("img");
+  img.className = "detailsImg";
+  img.alt = `${flight} ${hex}`;
+  img.src = imageUrl;
+  img.addEventListener("error", () => {
+    img.src = PLACEHOLDER_IMG;
+  });
+
+  const info = document.createElement("div");
+
+  const title = document.createElement("div");
+  title.className = "detailsTitle";
+  title.textContent = `${flight} • ${hex}`;
+
+  const sub = document.createElement("div");
+  sub.className = "detailsSub";
+  sub.textContent = `${type} • ${airline} • ${cacheNote}`;
+
+  const row = document.createElement("div");
+  row.className = "detailsRow";
+
+  const kv1 = document.createElement("div");
+  kv1.className = "kv";
+  kv1.innerHTML = `<div class="k">Photographer</div><div class="v">${photographer}</div>`;
+
+  const kv2 = document.createElement("div");
+  kv2.className = "kv";
+  kv2.innerHTML = `<div class="k">Position</div><div class="v">${formatNumber(selected.lat, "")}, ${formatNumber(selected.lon, "")}</div>`;
+
+  row.appendChild(kv1);
+  row.appendChild(kv2);
+
+  info.appendChild(title);
+  info.appendChild(sub);
+  info.appendChild(row);
+
+  card.appendChild(img);
+  card.appendChild(info);
+
+  details.replaceChildren(card);
 }
 
 function render(state) {
@@ -165,6 +227,7 @@ async function onSelect(hex) {
   isSelecting = true;
   try {
     const result = await selectAircraft(hex);
+    renderDetails(result && result.selected ? result.selected : null, result && result.meta ? result.meta : null);
     const forward = result && result.forward ? result.forward : null;
     if (forward && forward.sent) {
       showToast(`Forwarded ${hex.toUpperCase()} via ${forward.mode}.`, "ok");

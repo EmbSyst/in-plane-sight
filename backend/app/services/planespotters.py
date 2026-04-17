@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+"""
+Planespotters metadata integration.
+
+The Planespotters API can enrich dump1090 aircraft with:
+- a representative photo (thumbnail_large.src)
+- aircraft type/model
+- airline
+- photographer credit
+
+To avoid rate limiting, results are cached in-memory by ICAO hex. Negative results
+(no photos / offline) are cached as placeholder metadata as well.
+"""
+
+import logging
+from typing import Any
+
+import httpx
+
+from ..models import AircraftMetadata
+from ..utils import get_env, get_env_float
+
+
+logger = logging.getLogger("in-plane-sight.planespotters")
+
+_CACHE: dict[str, AircraftMetadata] = {}
+_CACHE_MAX_SIZE = 2048
+
+
+def _placeholder(hex_code: str) -> AircraftMetadata:
+    return AircraftMetadata(
+        hex=hex_code,
+        type=None,
+        airline=None,
+        photographer=None,
+        image_url="/static/aircraft-placeholder.svg",
+        from_cache=False,
+        placeholder=True,
+    )
+
+
+def _normalize_hex(hex_code: str) -> str:
+    return hex_code.strip().lower()
+
+
+def _get_nested_str(obj: Any, path: list[str]) -> str | None:
+    cur: Any = obj
+    for key in path:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(key)
+    if cur is None:
+        return None
+    if isinstance(cur, str):
+        value = cur.strip()
+        return value or None
+    return None
+
+
+def _parse_payload(hex_code: str, payload: Any) -> AircraftMetadata:
+    photos = payload.get("photos") if isinstance(payload, dict) else None
+    if not isinstance(photos, list) or len(photos) == 0:
+        return _placeholder(hex_code)
+
+    first = photos[0]
+    if not isinstance(first, dict):
+        return _placeholder(hex_code)
+
+    photographer: str | None
+    raw_photographer = first.get("photographer")
+    if isinstance(raw_photographer, str):
+        photographer = raw_photographer.strip() or None
+    elif isinstance(raw_photographer, dict):
+        photographer = _get_nested_str(raw_photographer, ["name"])
+    else:
+        photographer = None
+
+    aircraft_type = _get_nested_str(first, ["aircraft", "type"]) or _get_nested_str(first, ["aircraft", "model"])
+    airline = _get_nested_str(first, ["airline", "name"]) or _get_nested_str(first, ["airline", "iata"]) or _get_nested_str(first, ["airline", "icao"])
+    image_url = _get_nested_str(first, ["thumbnail_large", "src"]) or _get_nested_str(first, ["thumbnail", "src"])
+
+    if not image_url:
+        return _placeholder(hex_code)
+
+    return AircraftMetadata(
+        hex=hex_code,
+        type=aircraft_type,
+        airline=airline,
+        photographer=photographer,
+        image_url=image_url,
+        from_cache=False,
+        placeholder=False,
+    )
+
+
+async def get_aircraft_metadata(hex_code: str) -> AircraftMetadata:
+    """
+    Fetch aircraft metadata by ICAO hex via Planespotters (with caching).
+
+    Environment variables:
+    - PLANESPOTTERS_BASE_URL (default: https://api.planespotters.net/pub/photos/hex)
+    - PLANESPOTTERS_TIMEOUT_S (default: 2.0)
+    """
+    normalized = _normalize_hex(hex_code)
+    if not normalized:
+        return _placeholder(hex_code)
+
+    cached = _CACHE.get(normalized)
+    if cached is not None:
+        return cached.model_copy(update={"from_cache": True})
+
+    base_url = get_env("PLANESPOTTERS_BASE_URL", "https://api.planespotters.net/pub/photos/hex").rstrip("/")
+    timeout_s = get_env_float("PLANESPOTTERS_TIMEOUT_S", 2.0)
+    url = f"{base_url}/{normalized}"
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s)) as client:
+            response = await client.get(url)
+            if response.status_code == 404:
+                meta = _placeholder(normalized)
+            else:
+                response.raise_for_status()
+                meta = _parse_payload(normalized, response.json())
+    except Exception as exc:
+        logger.warning("Planespotters lookup failed for %s: %s", normalized, exc)
+        meta = _placeholder(normalized)
+
+    if len(_CACHE) >= _CACHE_MAX_SIZE:
+        _CACHE.clear()
+    _CACHE[normalized] = meta.model_copy(update={"from_cache": False})
+    return meta
