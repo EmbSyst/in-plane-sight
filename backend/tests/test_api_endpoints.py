@@ -39,11 +39,21 @@ class TestApiEndpoints(unittest.TestCase):
 
         sample = [Aircraft(hex="abc123", flight="TEST123", lat=1.0, lon=2.0, altitude=1000, speed=250)]
         state = app.state.dump1090
-        state.aircraft = sample
-        state.error = None
-        state.polled_at_unix_s = 123.0
-
+        
+        # When TestClient(app) is created, it fires the 'startup' event, which starts the background poller.
+        # We need to set the state *after* the client has started, or cancel the task so it doesn't overwrite it.
+        # Alternatively, we just mock the fetcher or override the state properties inside the block.
+        
         with TestClient(app) as client:
+            # Cancel the background poller so it doesn't overwrite our mock data
+            # with connection errors (since dump1090 isn't actually running)
+            if app.state.poll_task:
+                app.state.poll_task.cancel()
+            
+            state.aircraft = sample
+            state.error = None
+            state.polled_at_unix_s = 123.0
+            
             response = client.get("/api/aircraft")
             self.assertEqual(response.status_code, 200)
             payload = response.json()

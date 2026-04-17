@@ -25,7 +25,7 @@ Unter [backend/](backend/) liegt ein schlankes FastAPI-Backend, das:
 - die Daten als REST-API für das Touch-Frontend bereitstellt
 - bei Auswahl eines Flugzeugs dessen `lat/lon` modular an den Holo Globe weiterleitet (HTTP oder UDP, per ENV konfigurierbar)
 
-Architekturdiagramm (Mermaid): [architecture.mmd](architecture.mmd)
+Architekturdiagramm (Mermaid): [architecture.md](architecture.md)
 
 ### Start (Development)
 
@@ -52,15 +52,6 @@ Overrides funktionieren inline:
 ```bash
 GLOBE_MODE=udp GLOBE_UDP_HOST=192.168.4.1 GLOBE_UDP_PORT=4210 ./start.sh
 ```
-
-### Wo werden Umgebungsvariablen gesetzt?
-
-Die Variablen müssen im Environment des Prozesses vorhanden sein, der `uvicorn` startet.
-
-- Development: `export ...` im Shell oder via `VAR=... ./start.sh`
-- RasPi Autostart: systemd Service mit `Environment=...` oder `EnvironmentFile=...`
-- `.env` Datei: wird aktuell nicht automatisch geladen (nur wenn du sie bewusst sourcest oder später eine .env-Library ergänzt)
-
 
 ### Tests
 
