@@ -21,7 +21,7 @@ Das Repository befindet sich aktuell noch in einer frühen Phase und dient zunä
 
 Unter [backend/](backend/) liegt ein schlankes FastAPI-Backend, das:
 
-- live Aircraft-Daten von `dump1090` pollt (`http://127.0.0.1:8080/data/aircraft.json`)
+- live Aircraft-Daten aus der lokalen Datei `/tmp/aircraft.json` (von `dump1090` geschrieben) liest
 - die Daten als REST-API für das Touch-Frontend bereitstellt
 - bei Auswahl eines Flugzeugs dessen `lat/lon` modular an den Holo Globe weiterleitet (HTTP oder UDP, per ENV konfigurierbar)
 - bei Auswahl eines Flugzeugs Metadaten und ein Foto über die Planespotters API nachlädt (inkl. Cache & Placeholder)
@@ -34,7 +34,7 @@ Architekturdiagramm (Mermaid): [architecture.md](architecture.md)
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+DUMP1090_FILE_PATH=/tmp/aircraft.json uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Danach im Browser öffnen: `http://<raspi-ip>:8000/`
@@ -51,8 +51,15 @@ chmod +x start.sh
 Overrides funktionieren inline:
 
 ```bash
-GLOBE_MODE=udp GLOBE_UDP_HOST=192.168.4.1 GLOBE_UDP_PORT=4210 ./start.sh
+DUMP1090_FILE_PATH=/tmp/aircraft.json GLOBE_UDP_HOST=10.42.0.1 GLOBE_UDP_PORT=5005 ./start.sh
 ```
+
+Standardwerte in `start.sh`:
+
+- `DUMP1090_FILE_PATH=/tmp/aircraft.json`
+- `GLOBE_MODE=udp`
+- `GLOBE_UDP_HOST=10.42.0.1`
+- `GLOBE_UDP_PORT=5005`
 
 ### Tests
 
@@ -72,3 +79,8 @@ Optionale Umgebungsvariablen:
 
 - `PLANESPOTTERS_BASE_URL` (Default: `https://api.planespotters.net/pub/photos/hex`)
 - `PLANESPOTTERS_TIMEOUT_S` (Default: `2.0`)
+
+### Lokale Datenquelle (dump1090 File)
+
+Das Backend verwendet als Quelle standardmäßig `/tmp/aircraft.json`.
+Falls `dump1090` die Datei gerade schreibt oder sie noch nicht existiert, behandelt das Backend das robust und liefert vorübergehend eine leere Liste statt abzustürzen.
