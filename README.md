@@ -84,3 +84,30 @@ Optionale Umgebungsvariablen:
 
 Das Backend verwendet als Quelle standardmäßig `/tmp/aircraft.json`.
 Falls `dump1090` die Datei gerade schreibt oder sie noch nicht existiert, behandelt das Backend das robust und liefert vorübergehend eine leere Liste statt abzustürzen.
+
+## 📁 Projektstruktur
+
+Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Projekt und deren Zweck:
+
+- **`.github/workflows/ci.yml`**: Definition der GitHub Actions CI/CD-Pipeline, die bei jedem Push und Pull Request automatisch die Tests ausführt.
+- **`backend/`**: Enthält den gesamten Backend- und Frontend-Code.
+  - **`app/`**: Der FastAPI Python-Code.
+    - **`main.py`**: Der Haupteinstiegspunkt der Anwendung. Definiert die REST-API-Endpunkte (`/api/aircraft`, `/api/select`) und startet den Hintergrund-Poller.
+    - **`models.py`**: Pydantic-Datenmodelle (z.B. `Aircraft`, `AircraftMetadata`) für Validierung und Typensicherheit.
+    - **`state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory), wie z.B. Konfigurationen für das Auslesen der dump1090-Daten.
+    - **`utils.py`**: Hilfsfunktionen, insbesondere für das sichere Auslesen von Umgebungsvariablen.
+    - **`services/`**: Gekapselte Geschäftslogik und externe Schnittstellen.
+      - **`dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei (oder History-Dateien) von dump1090.
+      - **`globe.py`**: Behandelt die Kommunikation (UDP oder HTTP) mit dem Mikrocontroller des Holo Globes.
+      - **`planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern und Metadaten inkl. Caching-Logik.
+  - **`static/`**: Statische Dateien für das Frontend (Kiosk-Touch-UI).
+    - **`index.html`**: Das HTML-Grundgerüst der Benutzeroberfläche.
+    - **`styles.css`**: Das Styling, optimiert für Touchscreens und dunkle Umgebungen (Dark Mode).
+    - **`app.js`**: Die JavaScript-Logik des Frontends. Ruft Daten vom Backend ab und aktualisiert die UI.
+    - **`aircraft-placeholder.svg`**: Ein Fallback-Bild (Platzhalter), falls für ein Flugzeug kein Foto über die Planespotters API gefunden wird.
+  - **`tests/`**: Unit-Tests zur Überprüfung der Backend-Funktionalität.
+    - **`json-beispiel-data/`**: Ordner mit beispielhaften `aircraft.json`- und `history.json`-Dateien, die für Tests und Simulationen verwendet werden.
+  - **`requirements.txt`**: Liste aller benötigten Python-Abhängigkeiten (z.B. fastapi, uvicorn, httpx).
+- **`architecture.mmd` / `architecture.md`**: Ein Mermaid.js-Diagramm, das die Systemarchitektur visuell darstellt.
+- **`start.sh`**: Ein Shell-Skript, das den einfachen und schnellen Start der Anwendung mit den korrekten Umgebungsvariablen ermöglicht.
+- **`README.md`**: Diese Dokumentation.
