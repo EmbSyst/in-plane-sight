@@ -28,6 +28,22 @@ _CACHE: dict[str, AircraftMetadata] = {}
 _CACHE_MAX_SIZE = 2048
 
 
+def _copy_model(model: Any, update: dict[str, Any]) -> Any:
+    """
+    Return a shallow copy of a Pydantic model with updated fields.
+
+    Supports both Pydantic v2 (`model_copy`) and v1 (`copy`) to avoid runtime errors
+    on environments that still ship Pydantic v1.
+    """
+    model_copy = getattr(model, "model_copy", None)
+    if callable(model_copy):
+        return model_copy(update=update)
+    model_copy_v1 = getattr(model, "copy", None)
+    if callable(model_copy_v1):
+        return model_copy_v1(update=update)
+    raise TypeError("Unsupported model type for copying")
+
+
 def _placeholder(hex_code: str) -> AircraftMetadata:
     return AircraftMetadata(
         hex=hex_code,
@@ -108,7 +124,7 @@ async def get_aircraft_metadata(hex_code: str) -> AircraftMetadata:
 
     cached = _CACHE.get(normalized)
     if cached is not None:
-        return cached.model_copy(update={"from_cache": True})
+        return _copy_model(cached, {"from_cache": True})
 
     base_url = get_env("PLANESPOTTERS_BASE_URL", "https://api.planespotters.net/pub/photos/hex").rstrip("/")
     timeout_s = get_env_float("PLANESPOTTERS_TIMEOUT_S", 2.0)
@@ -128,5 +144,5 @@ async def get_aircraft_metadata(hex_code: str) -> AircraftMetadata:
 
     if len(_CACHE) >= _CACHE_MAX_SIZE:
         _CACHE.clear()
-    _CACHE[normalized] = meta.model_copy(update={"from_cache": False})
+    _CACHE[normalized] = _copy_model(meta, {"from_cache": False})
     return meta
