@@ -17,7 +17,7 @@ from .models import Aircraft
 class Dump1090State:
     """Holds the latest dump1090 poll results and error status."""
 
-    source_url: str
+    source_file_path: str
     poll_interval_s: float
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     aircraft: list[Aircraft] = field(default_factory=list)
