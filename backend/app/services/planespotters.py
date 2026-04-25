@@ -26,6 +26,26 @@ logger = logging.getLogger("in-plane-sight.planespotters")
 
 _CACHE: dict[str, AircraftMetadata] = {}
 _CACHE_MAX_SIZE = 2048
+_TYPE_MANUFACTURER_TOKENS = {
+    "airbus",
+    "boeing",
+    "embraer",
+    "bombardier",
+    "atr",
+    "cessna",
+    "beechcraft",
+    "gulfstream",
+    "dassault",
+    "pilatus",
+    "tupolev",
+    "ilyushin",
+    "antonov",
+    "sukhoi",
+    "comac",
+    "lockheed",
+    "mcdonnell",
+    "fokker",
+}
 
 
 def _copy_model(model: Any, update: dict[str, Any]) -> Any:
@@ -74,6 +94,57 @@ def _get_nested_str(obj: Any, path: list[str]) -> str | None:
     return None
 
 
+def _format_slug_token(token: str) -> str:
+    token = token.strip()
+    if not token:
+        return ""
+    return "".join((ch.upper() if ch.isalpha() else ch) for ch in token)
+
+
+def _parse_type_and_airline_from_link(link: str) -> tuple[str | None, str | None]:
+    """
+    Best-effort fallback for Planespotters responses that only contain a photo link.
+
+    In practice, the /pub/photos/hex/{hex} endpoint often returns:
+    - photographer
+    - thumbnail URLs
+    - a canonical photo link that embeds registration, airline slug and type slug
+    """
+    try:
+        path = link.split("?", 1)[0]
+        last = path.rstrip("/").split("/")[-1]
+        tokens = [t for t in last.split("-") if t]
+        if len(tokens) < 2:
+            return None, None
+
+        manufacturer_index: int | None = None
+        for idx, t in enumerate(tokens):
+            if t.lower() in _TYPE_MANUFACTURER_TOKENS:
+                manufacturer_index = idx
+                break
+        if manufacturer_index is None:
+            return None, None
+
+        reg_len = 1
+        if manufacturer_index >= 3 and len(tokens[0]) <= 3 and len(tokens[1]) <= 5:
+            reg_len = 2
+
+        airline_tokens = tokens[reg_len:manufacturer_index]
+        airline = " ".join(w.capitalize() for w in airline_tokens).strip() or None
+
+        manufacturer = tokens[manufacturer_index].capitalize()
+        rest_tokens = tokens[manufacturer_index + 1 :]
+        if rest_tokens:
+            rest = "-".join(_format_slug_token(t) for t in rest_tokens if t).strip("-")
+            aircraft_type = f"{manufacturer} {rest}".strip()
+        else:
+            aircraft_type = manufacturer
+
+        return aircraft_type or None, airline
+    except Exception:
+        return None, None
+
+
 def _parse_payload(hex_code: str, payload: Any) -> AircraftMetadata:
     photos = payload.get("photos") if isinstance(payload, dict) else None
     if not isinstance(photos, list) or len(photos) == 0:
@@ -95,6 +166,12 @@ def _parse_payload(hex_code: str, payload: Any) -> AircraftMetadata:
     aircraft_type = _get_nested_str(first, ["aircraft", "type"]) or _get_nested_str(first, ["aircraft", "model"])
     airline = _get_nested_str(first, ["airline", "name"]) or _get_nested_str(first, ["airline", "iata"]) or _get_nested_str(first, ["airline", "icao"])
     image_url = _get_nested_str(first, ["thumbnail_large", "src"]) or _get_nested_str(first, ["thumbnail", "src"])
+    link = _get_nested_str(first, ["link"])
+
+    if (aircraft_type is None or airline is None) and link:
+        type_from_link, airline_from_link = _parse_type_and_airline_from_link(link)
+        aircraft_type = aircraft_type or type_from_link
+        airline = airline or airline_from_link
 
     if not image_url:
         return _placeholder(hex_code)
