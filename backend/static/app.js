@@ -31,9 +31,20 @@ function formatCoord(value) {
   return "—";
 }
 
-function normalizeFlight(value, hex) {
+function normalizeFlight(value) {
   const text = (value || "").trim();
-  return text.length > 0 ? text : hex.toUpperCase();
+  return text.length > 0 ? text : null;
+}
+
+function displayFlight(value) {
+  const flight = normalizeFlight(value);
+  return flight ? flight : "—";
+}
+
+function sortKeyForAircraft(a) {
+  const flight = normalizeFlight(a && a.flight);
+  if (flight) return flight;
+  return String((a && a.hex) || "");
 }
 
 function showToast(message, kind) {
@@ -77,7 +88,7 @@ function renderDetails(selected, meta) {
   }
 
   const hex = String(selected.hex || "").toUpperCase();
-  const flight = normalizeFlight(selected.flight, selected.hex);
+  const flight = displayFlight(selected.flight);
 
   const imageUrl = meta && meta.image_url ? String(meta.image_url) : PLACEHOLDER_IMG;
   const type = meta && meta.type ? String(meta.type) : "Unknown type";
@@ -143,7 +154,7 @@ function render(state) {
   statusEl.style.color = ok ? "rgba(154,166,178,0.95)" : "rgba(255,107,107,0.95)";
 
   const list = Array.isArray(state.aircraft) ? state.aircraft.slice() : [];
-  list.sort((a, b) => normalizeFlight(a.flight, a.hex).localeCompare(normalizeFlight(b.flight, b.hex)));
+  list.sort((a, b) => sortKeyForAircraft(a).localeCompare(sortKeyForAircraft(b)));
 
   const fragment = document.createDocumentFragment();
   for (const a of list) {
@@ -160,7 +171,7 @@ function render(state) {
 
     const flight = document.createElement("div");
     flight.className = "flight";
-    flight.textContent = normalizeFlight(a.flight, a.hex);
+    flight.textContent = displayFlight(a.flight);
 
     const hex = document.createElement("div");
     hex.className = "hex";
