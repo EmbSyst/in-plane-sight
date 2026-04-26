@@ -107,9 +107,25 @@ function renderDetails(selected, meta) {
 
   const info = document.createElement("div");
 
+  const header = document.createElement("div");
+  header.className = "detailsHeader";
+
   const title = document.createElement("div");
   title.className = "detailsTitle";
   title.textContent = `${flight} • ${hex}`;
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "detailsClose";
+  closeBtn.setAttribute("aria-label", "Unselect aircraft");
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    renderDetails(null, null);
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
 
   const row = document.createElement("div");
   row.className = "detailsRow";
@@ -130,7 +146,7 @@ function renderDetails(selected, meta) {
   row.appendChild(kvType);
   row.appendChild(kvAirline);
 
-  info.appendChild(title);
+  info.appendChild(header);
   info.appendChild(row);
 
   card.appendChild(img);
