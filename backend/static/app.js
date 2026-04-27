@@ -10,6 +10,9 @@
 const POLL_INTERVAL_MS = 1000;
 const PLACEHOLDER_IMG = "/static/aircraft-placeholder.svg";
 
+let selectedHex = null;
+let selectedMeta = null;
+
 function $(id) {
   const el = document.getElementById(id);
   if (!el) {
@@ -45,6 +48,16 @@ function sortKeyForAircraft(a) {
   const flight = normalizeFlight(a && a.flight);
   if (flight) return flight;
   return String((a && a.hex) || "");
+}
+
+function normalizeHex(hex) {
+  return String(hex || "").trim().toLowerCase();
+}
+
+function clearSelection() {
+  selectedHex = null;
+  selectedMeta = null;
+  renderDetails(null, null);
 }
 
 function showToast(message, kind) {
@@ -121,7 +134,7 @@ function renderDetails(selected, meta) {
   closeBtn.textContent = "×";
   closeBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    renderDetails(null, null);
+    clearSelection();
   });
 
   header.appendChild(title);
@@ -260,7 +273,9 @@ async function onSelect(hex) {
   isSelecting = true;
   try {
     const result = await selectAircraft(hex);
-    renderDetails(result && result.selected ? result.selected : null, result && result.meta ? result.meta : null);
+    selectedHex = normalizeHex(hex);
+    selectedMeta = result && result.meta ? result.meta : null;
+    renderDetails(result && result.selected ? result.selected : null, selectedMeta);
     const forward = result && result.forward ? result.forward : null;
     if (forward && forward.sent) {
       showToast(`Forwarded ${hex.toUpperCase()} via ${forward.mode}.`, "ok");
@@ -275,10 +290,18 @@ async function onSelect(hex) {
   }
 }
 
+function refreshSelectedFromState(state) {
+  if (!selectedHex || !state || !Array.isArray(state.aircraft)) return;
+  const match = state.aircraft.find((a) => normalizeHex(a && a.hex) === selectedHex) || null;
+  if (!match) return;
+  renderDetails(match, selectedMeta);
+}
+
 async function loop() {
   try {
     const state = await fetchAircraft();
     render(state);
+    refreshSelectedFromState(state);
   } catch (err) {
     $("status").textContent = `Backend offline • ${String(err && err.message ? err.message : err)}`;
     $("status").style.color = "rgba(255,107,107,0.95)";
