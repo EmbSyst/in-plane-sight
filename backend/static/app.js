@@ -12,6 +12,7 @@ const PLACEHOLDER_IMG = "/static/aircraft-placeholder.svg";
 
 let selectedHex = null;
 let selectedMeta = null;
+let systemPosition = null;
 
 function $(id) {
   const el = document.getElementById(id);
@@ -32,6 +33,18 @@ function formatCoord(value) {
   const parsed = Number(value);
   if (Number.isFinite(parsed)) return parsed.toFixed(4);
   return "—";
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 function normalizeFlight(value) {
@@ -107,6 +120,18 @@ function renderDetails(selected, meta) {
   const type = meta && meta.type ? String(meta.type) : "Unknown type";
   const airline = meta && meta.airline ? String(meta.airline) : "Unknown airline";
 
+  let distanceText = "—";
+  if (
+    systemPosition &&
+    typeof systemPosition.lat === "number" &&
+    typeof systemPosition.lon === "number" &&
+    typeof selected.lat === "number" &&
+    typeof selected.lon === "number"
+  ) {
+    const km = haversineKm(systemPosition.lat, systemPosition.lon, selected.lat, selected.lon);
+    if (Number.isFinite(km)) distanceText = `${km.toFixed(1)} km`;
+  }
+
   const card = document.createElement("div");
   card.className = "detailsCard";
 
@@ -155,9 +180,14 @@ function renderDetails(selected, meta) {
   kvAirline.className = "kv";
   kvAirline.innerHTML = `<div class="k">Airline</div><div class="v">${airline}</div>`;
 
+  const kvDistance = document.createElement("div");
+  kvDistance.className = "kv";
+  kvDistance.innerHTML = `<div class="k">Distance</div><div class="v">${distanceText}</div>`;
+
   row.appendChild(kvPos);
   row.appendChild(kvType);
   row.appendChild(kvAirline);
+  row.appendChild(kvDistance);
 
   info.appendChild(header);
   info.appendChild(row);
@@ -171,6 +201,8 @@ function renderDetails(selected, meta) {
 function render(state) {
   const statusEl = $("status");
   const grid = $("grid");
+
+  systemPosition = state && state.system_position ? state.system_position : null;
 
   const ok = Boolean(state.ok);
   const count = Array.isArray(state.aircraft) ? state.aircraft.length : 0;

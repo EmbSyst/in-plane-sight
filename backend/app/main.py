@@ -22,6 +22,7 @@ from .models import AircraftListResponse, AircraftMetadata, SelectRequest, Selec
 from .services.dump1090 import Dump1090Client
 from .services.globe import forward_to_globe
 from .services.planespotters import get_aircraft_metadata
+from .services.system_position import get_system_position
 from .state import Dump1090State
 from .utils import get_env, get_env_float
 
@@ -127,13 +128,15 @@ def create_app() -> FastAPI:
         on-demand to keep the UI responsive even when dump1090 is slow or offline.
         """
         state: Dump1090State = app.state.dump1090
+        system_position = get_system_position()
         async with state.lock:
             return AircraftListResponse(
                 ok=state.error is None,
-                source_url=state.source_file_path,
+                source_file_path=state.source_file_path,
                 polled_at_unix_s=state.polled_at_unix_s,
                 error=state.error,
                 aircraft=state.aircraft,
+                system_position=system_position,
             )
 
     @app.post("/api/select", response_model=SelectResponse)
