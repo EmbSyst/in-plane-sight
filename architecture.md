@@ -5,19 +5,20 @@ flowchart LR
     Browser["Chromium (Kiosk Mode)"]
     UI["Touch UI (HTML/CSS/JS)\n/backend/static/*"]
     API["FastAPI Backend\n/backend/app/main.py"]
-    Poller["Background Poller\npolls dump1090 every 1s"]
+    Poller["Background Poller\nreads aircraft snapshot every 1s"]
     Cache["In-memory Cache\nDump1090State"]
-    DumpClient["Dump1090Client\nHTTP GET aircraft.json"]
+    DumpClient["Dump1090Client\nreads /tmp/aircraft.json"]
+    Snapshot["/tmp/aircraft.json\n(local JSON snapshot)"]
     MetaSvc["Planespotters Metadata\n(in-memory cache by hex)"]
     GlobeSvc["Globe Forwarding Service\nHTTP or UDP (ENV)"]
   end
 
   subgraph SDR["SDR Receiver Stack"]
-    Dump1090["dump1090\nhttp://127.0.0.1:8080/data/aircraft.json"]
+    Dump1090["dump1090-fa\nwrites /tmp/aircraft.json (RAM disk)"]
   end
 
   subgraph Internet["Internet (optional)"]
-    Planespotters["Planespotters API\n/photos/hex/{hex}"]
+    Planespotters["Planespotters API\n/pub/photos/hex/{hex}"]
   end
 
   subgraph Globe["Holo Globe Microcontroller"]
@@ -31,7 +32,9 @@ flowchart LR
   API --> Poller
   Poller --> Cache
   Poller --> DumpClient
-  DumpClient -->|"HTTP GET"| Dump1090
+  DumpClient --> Snapshot
+  Dump1090 --> Snapshot
+  API -->|"GET /api/aircraft"| Cache
 
   API -->|"on selection\n(fetch meta + cache)"| MetaSvc
   MetaSvc -->|"HTTP GET (cached)"| Planespotters
