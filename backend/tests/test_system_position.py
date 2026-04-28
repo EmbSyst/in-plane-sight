@@ -12,9 +12,7 @@ import unittest
 
 class TestSystemPosition(unittest.TestCase):
     def test_reads_lat_lon_from_env(self) -> None:
-        from backend.app.services import system_position
-
-        system_position.clear_system_position_cache()
+        import backend.app.services.system_position as system_position
         with unittest.mock.patch.dict(
             os.environ,
             {"SYSTEM_LAT": "49.121479", "SYSTEM_LON": "9.211960"},
@@ -27,9 +25,7 @@ class TestSystemPosition(unittest.TestCase):
             self.assertEqual(pos["source"], "env")
 
     def test_returns_none_when_env_missing(self) -> None:
-        from backend.app.services import system_position
-
-        system_position.clear_system_position_cache()
+        import backend.app.services.system_position as system_position
         with unittest.mock.patch.dict(os.environ, {}, clear=True):
             pos = system_position.get_system_position()
             self.assertIsNone(pos)

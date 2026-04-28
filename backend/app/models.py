@@ -29,7 +29,7 @@ class SystemPosition(BaseModel):
 
     lat: float = Field(..., description="System latitude")
     lon: float = Field(..., description="System longitude")
-    source: str = Field(..., description="Position source (e.g. env, gpsd)")
+    source: str = Field(..., description="Position source (e.g. env)")
 
 
 class AircraftListResponse(BaseModel):
