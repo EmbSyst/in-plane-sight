@@ -24,14 +24,23 @@ class Aircraft(BaseModel):
     speed: float | None = Field(default=None, description="Ground speed (often knots)")
 
 
+class SystemPosition(BaseModel):
+    """System's own position, used to compute distance to aircraft."""
+
+    lat: float = Field(..., description="System latitude")
+    lon: float = Field(..., description="System longitude")
+    source: str = Field(..., description="Position source (e.g. env)")
+
+
 class AircraftListResponse(BaseModel):
     """Response payload for the UI poll endpoint."""
 
     ok: bool
-    source_url: str
+    source_file_path: str
     polled_at_unix_s: float | None
     error: str | None
     aircraft: list[Aircraft]
+    system_position: SystemPosition | None = None
 
 
 class SelectRequest(BaseModel):

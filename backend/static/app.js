@@ -10,6 +10,10 @@
 const POLL_INTERVAL_MS = 1000;
 const PLACEHOLDER_IMG = "/static/aircraft-placeholder.svg";
 
+let selectedHex = null;
+let selectedMeta = null;
+let systemPosition = null;
+
 function $(id) {
   const el = document.getElementById(id);
   if (!el) {
@@ -23,9 +27,50 @@ function formatNumber(value, unit) {
   return unit ? `${value} ${unit}` : String(value);
 }
 
-function normalizeFlight(value, hex) {
+function formatCoord(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  if (typeof value === "number") return value.toFixed(4);
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return parsed.toFixed(4);
+  return "—";
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function normalizeFlight(value) {
   const text = (value || "").trim();
-  return text.length > 0 ? text : hex.toUpperCase();
+  return text.length > 0 ? text : null;
+}
+
+function displayFlight(value) {
+  const flight = normalizeFlight(value);
+  return flight ? flight : "—";
+}
+
+function sortKeyForAircraft(a) {
+  const flight = normalizeFlight(a && a.flight);
+  if (flight) return flight;
+  return String((a && a.hex) || "");
+}
+
+function normalizeHex(hex) {
+  return String(hex || "").trim().toLowerCase();
+}
+
+function clearSelection() {
+  selectedHex = null;
+  selectedMeta = null;
+  renderDetails(null, null);
 }
 
 function showToast(message, kind) {
@@ -69,13 +114,23 @@ function renderDetails(selected, meta) {
   }
 
   const hex = String(selected.hex || "").toUpperCase();
-  const flight = normalizeFlight(selected.flight, selected.hex);
+  const flight = displayFlight(selected.flight);
 
   const imageUrl = meta && meta.image_url ? String(meta.image_url) : PLACEHOLDER_IMG;
   const type = meta && meta.type ? String(meta.type) : "Unknown type";
   const airline = meta && meta.airline ? String(meta.airline) : "Unknown airline";
-  const photographer = meta && meta.photographer ? String(meta.photographer) : "Unknown photographer";
-  const cacheNote = meta && meta.from_cache ? "cached" : "fresh";
+
+  let distanceText = "—";
+  if (
+    systemPosition &&
+    typeof systemPosition.lat === "number" &&
+    typeof systemPosition.lon === "number" &&
+    typeof selected.lat === "number" &&
+    typeof selected.lon === "number"
+  ) {
+    const km = haversineKm(systemPosition.lat, systemPosition.lon, selected.lat, selected.lon);
+    if (Number.isFinite(km)) distanceText = `${km.toFixed(1)} km`;
+  }
 
   const card = document.createElement("div");
   card.className = "detailsCard";
@@ -90,30 +145,51 @@ function renderDetails(selected, meta) {
 
   const info = document.createElement("div");
 
+  const header = document.createElement("div");
+  header.className = "detailsHeader";
+
   const title = document.createElement("div");
   title.className = "detailsTitle";
   title.textContent = `${flight} • ${hex}`;
 
-  const sub = document.createElement("div");
-  sub.className = "detailsSub";
-  sub.textContent = `${type} • ${airline} • ${cacheNote}`;
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "detailsClose";
+  closeBtn.setAttribute("aria-label", "Unselect aircraft");
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    clearSelection();
+  });
+
+  header.appendChild(title);
+  header.appendChild(closeBtn);
 
   const row = document.createElement("div");
   row.className = "detailsRow";
 
-  const kv1 = document.createElement("div");
-  kv1.className = "kv";
-  kv1.innerHTML = `<div class="k">Photographer</div><div class="v">${photographer}</div>`;
+  const kvPos = document.createElement("div");
+  kvPos.className = "kv";
+  kvPos.innerHTML = `<div class="k">Position</div><div class="v">${formatCoord(selected.lat)}, ${formatCoord(selected.lon)}</div>`;
 
-  const kv2 = document.createElement("div");
-  kv2.className = "kv";
-  kv2.innerHTML = `<div class="k">Position</div><div class="v">${formatNumber(selected.lat, "")}, ${formatNumber(selected.lon, "")}</div>`;
+  const kvType = document.createElement("div");
+  kvType.className = "kv";
+  kvType.innerHTML = `<div class="k">Type</div><div class="v">${type}</div>`;
 
-  row.appendChild(kv1);
-  row.appendChild(kv2);
+  const kvAirline = document.createElement("div");
+  kvAirline.className = "kv";
+  kvAirline.innerHTML = `<div class="k">Airline</div><div class="v">${airline}</div>`;
 
-  info.appendChild(title);
-  info.appendChild(sub);
+  const kvDistance = document.createElement("div");
+  kvDistance.className = "kv";
+  kvDistance.innerHTML = `<div class="k">Distance</div><div class="v">${distanceText}</div>`;
+
+  row.appendChild(kvPos);
+  row.appendChild(kvType);
+  row.appendChild(kvAirline);
+  row.appendChild(kvDistance);
+
+  info.appendChild(header);
   info.appendChild(row);
 
   card.appendChild(img);
@@ -126,6 +202,8 @@ function render(state) {
   const statusEl = $("status");
   const grid = $("grid");
 
+  systemPosition = state && state.system_position ? state.system_position : null;
+
   const ok = Boolean(state.ok);
   const count = Array.isArray(state.aircraft) ? state.aircraft.length : 0;
   const pollText =
@@ -137,7 +215,7 @@ function render(state) {
   statusEl.style.color = ok ? "rgba(154,166,178,0.95)" : "rgba(255,107,107,0.95)";
 
   const list = Array.isArray(state.aircraft) ? state.aircraft.slice() : [];
-  list.sort((a, b) => normalizeFlight(a.flight, a.hex).localeCompare(normalizeFlight(b.flight, b.hex)));
+  list.sort((a, b) => sortKeyForAircraft(a).localeCompare(sortKeyForAircraft(b)));
 
   const fragment = document.createDocumentFragment();
   for (const a of list) {
@@ -154,7 +232,7 @@ function render(state) {
 
     const flight = document.createElement("div");
     flight.className = "flight";
-    flight.textContent = normalizeFlight(a.flight, a.hex);
+    flight.textContent = displayFlight(a.flight);
 
     const hex = document.createElement("div");
     hex.className = "hex";
@@ -227,7 +305,9 @@ async function onSelect(hex) {
   isSelecting = true;
   try {
     const result = await selectAircraft(hex);
-    renderDetails(result && result.selected ? result.selected : null, result && result.meta ? result.meta : null);
+    selectedHex = normalizeHex(hex);
+    selectedMeta = result && result.meta ? result.meta : null;
+    renderDetails(result && result.selected ? result.selected : null, selectedMeta);
     const forward = result && result.forward ? result.forward : null;
     if (forward && forward.sent) {
       showToast(`Forwarded ${hex.toUpperCase()} via ${forward.mode}.`, "ok");
@@ -242,10 +322,18 @@ async function onSelect(hex) {
   }
 }
 
+function refreshSelectedFromState(state) {
+  if (!selectedHex || !state || !Array.isArray(state.aircraft)) return;
+  const match = state.aircraft.find((a) => normalizeHex(a && a.hex) === selectedHex) || null;
+  if (!match) return;
+  renderDetails(match, selectedMeta);
+}
+
 async function loop() {
   try {
     const state = await fetchAircraft();
     render(state);
+    refreshSelectedFromState(state);
   } catch (err) {
     $("status").textContent = `Backend offline • ${String(err && err.message ? err.message : err)}`;
     $("status").style.color = "rgba(255,107,107,0.95)";

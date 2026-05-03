@@ -18,10 +18,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import AircraftListResponse, SelectRequest, SelectResponse
+from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse
 from .services.dump1090 import Dump1090Client
 from .services.globe import forward_to_globe
 from .services.planespotters import get_aircraft_metadata
+from .services.system_position import get_system_position
 from .state import Dump1090State
 from .utils import get_env, get_env_float
 
@@ -34,11 +35,10 @@ def create_app() -> FastAPI:
     Create and configure the FastAPI application.
 
     Configuration is driven by environment variables:
-    - DUMP1090_URL
+    - DUMP1090_FILE_PATH
     - DUMP1090_POLL_INTERVAL_S
-    - GLOBE_* (used in the globe forwarding service)
     """
-    dump1090_url = get_env("DUMP1090_URL", "http://127.0.0.1:8080/data/aircraft.json")
+    dump1090_file_path = get_env("DUMP1090_FILE_PATH", "/tmp/aircraft.json")
     poll_interval_s = get_env_float("DUMP1090_POLL_INTERVAL_S", 1.0)
     backoff_initial_s = get_env_float("DUMP1090_BACKOFF_INITIAL_S", poll_interval_s)
     backoff_max_s = get_env_float("DUMP1090_BACKOFF_MAX_S", 15.0)
@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
 
     logger = logging.getLogger("in-plane-sight.poller")
 
-    app.state.dump1090 = Dump1090State(source_url=dump1090_url, poll_interval_s=poll_interval_s)
+    app.state.dump1090 = Dump1090State(source_file_path=dump1090_file_path, poll_interval_s=poll_interval_s)
     app.state.poll_task = None
 
     if STATIC_DIR.exists():
@@ -68,7 +68,7 @@ def create_app() -> FastAPI:
 
         On failures the previous aircraft list is kept and the error string is updated.
         """
-        client = Dump1090Client(url=dump1090_url)
+        client = Dump1090Client(file_path=dump1090_file_path)
         state: Dump1090State = app.state.dump1090
         consecutive_failures = 0
         sleep_s = poll_interval_s
@@ -128,13 +128,15 @@ def create_app() -> FastAPI:
         on-demand to keep the UI responsive even when dump1090 is slow or offline.
         """
         state: Dump1090State = app.state.dump1090
+        system_position = get_system_position()
         async with state.lock:
             return AircraftListResponse(
                 ok=state.error is None,
-                source_url=state.source_url,
+                source_file_path=state.source_file_path,
                 polled_at_unix_s=state.polled_at_unix_s,
                 error=state.error,
                 aircraft=state.aircraft,
+                system_position=system_position,
             )
 
     @app.post("/api/select", response_model=SelectResponse)
@@ -155,6 +157,11 @@ def create_app() -> FastAPI:
         forward_result = await forward_to_globe(selected)
         meta = await get_aircraft_metadata(selected.hex)
         return SelectResponse(ok=forward_result.sent, selected=selected, forward=forward_result, meta=meta)
+
+    @app.get("/api/aircraft/{hex_code}/metadata", response_model=AircraftMetadata)
+    async def aircraft_metadata(hex_code: str) -> AircraftMetadata:
+        """Return cached/enriched image metadata for one aircraft hex code."""
+        return await get_aircraft_metadata(hex_code)
 
     return app
 

@@ -13,6 +13,12 @@ from unittest.mock import AsyncMock, patch
 
 
 class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        try:
+            __import__("httpx")
+        except ModuleNotFoundError:
+            self.skipTest("httpx is not installed")
+
     async def test_caches_by_hex_and_parses_fields(self) -> None:
         from backend.app.services import planespotters
 
@@ -57,6 +63,44 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(meta2.from_cache)
             self.assertEqual(instance.get.await_count, 1)
 
+    async def test_parses_type_and_airline_from_link_when_missing(self) -> None:
+        from backend.app.services import planespotters
+
+        payload = {
+            "photos": [
+                {
+                    "photographer": "Wiktor Kepinski",
+                    "thumbnail_large": {"src": "https://example.invalid/photo.jpg"},
+                    "link": "https://www.planespotters.net/photo/1783516/9h-loi-lauda-europe-airbus-a320-214?utm_source=api",
+                }
+            ]
+        }
+
+        class _Resp:
+            status_code = 200
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self):
+                return payload
+
+        async def _fake_get(_url: str):
+            return _Resp()
+
+        with patch("backend.app.services.planespotters.httpx.AsyncClient") as MockClient:
+            instance = MockClient.return_value.__aenter__.return_value
+            instance.get = AsyncMock(side_effect=_fake_get)
+
+            planespotters._CACHE.clear()
+            meta = await planespotters.get_aircraft_metadata("4d22b4")
+            self.assertEqual(meta.type, "Airbus A320-214")
+            self.assertEqual(meta.airline, "Lauda Europe")
+            self.assertEqual(meta.photographer, "Wiktor Kepinski")
+            self.assertEqual(meta.image_url, "https://example.invalid/photo.jpg")
+            self.assertFalse(meta.placeholder)
+            self.assertEqual(instance.get.await_count, 1)
+
     async def test_fallback_to_placeholder_on_404(self) -> None:
         from backend.app.services import planespotters
 
@@ -80,4 +124,3 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             meta = await planespotters.get_aircraft_metadata("abc123")
             self.assertTrue(meta.placeholder)
             self.assertTrue(meta.image_url and meta.image_url.endswith("aircraft-placeholder.svg"))
-

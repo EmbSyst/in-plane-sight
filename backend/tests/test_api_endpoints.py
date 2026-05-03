@@ -7,6 +7,7 @@ current environment, the tests are skipped instead of failing.
 
 from __future__ import annotations
 
+import os
 import unittest
 
 
@@ -44,7 +45,11 @@ class TestApiEndpoints(unittest.TestCase):
         # We need to set the state *after* the client has started, or cancel the task so it doesn't overwrite it.
         # Alternatively, we just mock the fetcher or override the state properties inside the block.
         
-        with TestClient(app) as client:
+        with TestClient(app) as client, unittest.mock.patch.dict(
+            os.environ,
+            {"SYSTEM_LAT": "49.121479", "SYSTEM_LON": "9.211960"},
+            clear=False,
+        ):
             # Cancel the background poller so it doesn't overwrite our mock data
             # with connection errors (since dump1090 isn't actually running)
             if app.state.poll_task:
@@ -61,6 +66,10 @@ class TestApiEndpoints(unittest.TestCase):
             self.assertEqual(payload["polled_at_unix_s"], 123.0)
             self.assertEqual(len(payload["aircraft"]), 1)
             self.assertEqual(payload["aircraft"][0]["hex"], "abc123")
+            self.assertIn("system_position", payload)
+            self.assertIsNotNone(payload["system_position"])
+            self.assertAlmostEqual(payload["system_position"]["lat"], 49.121479)
+            self.assertAlmostEqual(payload["system_position"]["lon"], 9.211960)
 
     def test_select_missing_returns_404(self) -> None:
         TestClient, create_app, _Aircraft = self._imports_or_skip()
@@ -69,4 +78,3 @@ class TestApiEndpoints(unittest.TestCase):
         with TestClient(app) as client:
             response = client.post("/api/select", json={"hex": "doesnotexist"})
             self.assertEqual(response.status_code, 404)
-
