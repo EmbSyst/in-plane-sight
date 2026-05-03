@@ -27,7 +27,7 @@ export GLOBE_HTTP_TIMEOUT_S="${GLOBE_HTTP_TIMEOUT_S:-1.0}"
 export GLOBE_UDP_HOST="${GLOBE_UDP_HOST:-10.42.0.1}"
 export GLOBE_UDP_PORT="${GLOBE_UDP_PORT:-5005}"
 
-// Put in position of the system on the map
+# Put in position of the system on the map
 export SYSTEM_LAT=49.121479
 export SYSTEM_LON=9.211960
 
