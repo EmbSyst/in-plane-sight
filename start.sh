@@ -38,29 +38,8 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 RELOAD="${RELOAD:-0}"
 
-START_DUMP1090="${START_DUMP1090:-1}"
-DUMP1090_CMD="${DUMP1090_CMD:-}"
-
-if [[ "${START_DUMP1090}" == "1" ]]; then
-  if [[ -z "${DUMP1090_CMD}" ]]; then
-    DUMP1090_CMD="dump1090-fa"
-  fi
-
-  bash -lc "source ~/.bashrc 2>/dev/null || true; shopt -s expand_aliases; ${DUMP1090_CMD}" &
-  DUMP1090_PID="$!"
-  trap 'kill "${DUMP1090_PID}" 2>/dev/null || true' EXIT INT TERM
-fi
-
 if [[ "${RELOAD}" == "1" ]]; then
-  if [[ "${START_DUMP1090}" == "1" ]]; then
-    uvicorn backend.app.main:app --host "${HOST}" --port "${PORT}" --reload "$@"
-  else
-    exec uvicorn backend.app.main:app --host "${HOST}" --port "${PORT}" --reload "$@"
-  fi
+  exec uvicorn backend.app.main:app --host "${HOST}" --port "${PORT}" --reload "$@"
 else
-  if [[ "${START_DUMP1090}" == "1" ]]; then
-    uvicorn backend.app.main:app --host "${HOST}" --port "${PORT}" "$@"
-  else
-    exec uvicorn backend.app.main:app --host "${HOST}" --port "${PORT}" "$@"
-  fi
+  exec uvicorn backend.app.main:app --host "${HOST}" --port "${PORT}" "$@"
 fi

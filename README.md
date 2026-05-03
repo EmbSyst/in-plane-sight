@@ -72,9 +72,6 @@ Standardwerte in `start.sh`:
 - `GLOBE_MODE=udp`
 - `GLOBE_UDP_HOST=10.42.0.1`
 - `GLOBE_UDP_PORT=5005`
-- Standard: `START_DUMP1090=1` startet zusätzlich `dump1090-fa` im Hintergrund (Alias/Command)
-- Optional: `START_DUMP1090=0` startet nur das Backend (ohne dump1090)
-- Optional: `DUMP1090_CMD="..."` überschreibt den dump1090-Startbefehl (wenn `START_DUMP1090=1`)
 
 ### Tests
 

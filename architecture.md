@@ -12,7 +12,7 @@ flowchart LR
     SysPos["System Position\n(from env vars SYSTEM_LAT/SYSTEM_LON)"]
     MetaSvc["Planespotters Metadata\n(in-memory cache by hex)"]
     GlobeSvc["Globe Forwarding Service\nUDP (default) or HTTP (ENV)"]
-    StartScript["start.sh\n(optionally starts dump1090 + runs uvicorn)"]
+    StartScript["start.sh\n(runs uvicorn)"]
   end
 
   subgraph SDR["SDR Receiver Stack"]
@@ -46,6 +46,5 @@ flowchart LR
   API -->|"on selection"| GlobeSvc
   GlobeSvc -->|"HTTP POST or UDP JSON\n{hex,flight,lat,lon,altitude,speed}"| MCU
 
-  StartScript -->|"optional"| Dump1090
   StartScript -->|"exec"| API
 ```
