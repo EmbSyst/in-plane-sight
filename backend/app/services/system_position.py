@@ -8,7 +8,6 @@ aircraft if the backend exposes the system's own position.
 
 Sources (in priority order):
 1) Environment variables SYSTEM_LAT and SYSTEM_LON
-2) (removed) GPSD / GeoIP fallbacks
 
 The function returns a small dict to keep dependencies minimal.
 """
