@@ -38,18 +38,15 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 RELOAD="${RELOAD:-0}"
 
-START_DUMP1090="${START_DUMP1090:-0}"
+START_DUMP1090="${START_DUMP1090:-1}"
 DUMP1090_CMD="${DUMP1090_CMD:-}"
 
 if [[ "${START_DUMP1090}" == "1" ]]; then
   if [[ -z "${DUMP1090_CMD}" ]]; then
-    DUMP1090_CMD="/home/pi/Projekt/dump1090-fa/dump1090 --device-type hackrf --write-json /tmp --interactive-show-distance"
-    if [[ -n "${SYSTEM_LAT:-}" && -n "${SYSTEM_LON:-}" ]]; then
-      DUMP1090_CMD="${DUMP1090_CMD} --lat ${SYSTEM_LAT} --lon ${SYSTEM_LON}"
-    fi
+    DUMP1090_CMD="dump1090-fa"
   fi
 
-  bash -lc "${DUMP1090_CMD}" &
+  bash -lc "source ~/.bashrc 2>/dev/null || true; shopt -s expand_aliases; ${DUMP1090_CMD}" &
   DUMP1090_PID="$!"
   trap 'kill "${DUMP1090_PID}" 2>/dev/null || true' EXIT INT TERM
 fi

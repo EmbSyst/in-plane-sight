@@ -31,6 +31,7 @@ Touch-UI (Kiosk):
 - Pollt `/api/aircraft` alle 1s und zeigt Altitude/Speed pro Flugzeug
 - „Select on Globe“ öffnet eine Detailansicht mit Bild, Type, Airline und Position
 - Die Position (`lat/lon`) in der Detailansicht aktualisiert sich ebenfalls mit jedem Poll (ohne erneuten Planespotters-Call)
+- Wenn `SYSTEM_LAT`/`SYSTEM_LON` gesetzt sind, wird in der Detailansicht zusätzlich die Distanz zum ausgewählten Flugzeug in km angezeigt (im Frontend berechnet)
 - Ein `×` Button schließt die Detailansicht (Unselect)
 
 Architekturdiagramm (Mermaid): [architecture.md](architecture.md)
@@ -59,6 +60,10 @@ Overrides funktionieren inline:
 
 ```bash
 DUMP1090_FILE_PATH=/tmp/aircraft.json GLOBE_UDP_HOST=10.42.0.1 GLOBE_UDP_PORT=5005 ./start.sh
+
+# Systemposition (für Distanzberechnung in der UI):
+SYSTEM_LAT=49.121479 SYSTEM_LON=9.211960 ./start.sh
+
 ```
 
 Standardwerte in `start.sh`:
@@ -67,6 +72,9 @@ Standardwerte in `start.sh`:
 - `GLOBE_MODE=udp`
 - `GLOBE_UDP_HOST=10.42.0.1`
 - `GLOBE_UDP_PORT=5005`
+- Standard: `START_DUMP1090=1` startet zusätzlich `dump1090-fa` im Hintergrund (Alias/Command)
+- Optional: `START_DUMP1090=0` startet nur das Backend (ohne dump1090)
+- Optional: `DUMP1090_CMD="..."` überschreibt den dump1090-Startbefehl (wenn `START_DUMP1090=1`)
 
 ### Tests
 
