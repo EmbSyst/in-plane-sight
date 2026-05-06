@@ -10,7 +10,7 @@ def build_payload(kind: str) -> bytes:
     if kind == "ping":
         payload = {"type": "ping", "ts": time.time()}
     elif kind == "color":
-        payload = {"type": "color", "r": 0, "g": 64, "b": 0, "ts": time.time()}
+        payload = {"type": "color", "r": 64, "g": 64, "b": 0, "ts": time.time()}
     else:
         payload = {
             "hex": "4B1902",
