@@ -1,0 +1,34 @@
+# Folgende Messages sollten wir nutzen:
+
+
+## Den Anzeigemodus auf dem Globe wechseln
+Werte für 
+- mode: 0 # LEDs aus
+- mode: 1 # fülle den gesamten Globus mit der übergebenen Farbe $color
+- mode: 2 # Färbe den Globus mit $color ein und zeige einen roten Punkt für das Flugzeug an Position (standardmäßig in der Mitte)
+- mode: 3 # RGB Regenbogen-Farbspiel
+- color: Liste aus 3 Int-Werten für RGB   
+{
+  "type": "change_display_mode",
+  "mode": 0,
+  "color": [255, 255, 255]
+}
+
+## Motorsteuerung (über PWM)
+Werte für
+- mode: 0 # Motor aus
+- mode: 1 # rechne Wert für $rpm in benötigte int-Werte um und übergebe sie als int Liste
+{
+  "type": "change_PWM",
+  "mode": 0,
+  "rpm": []
+}
+
+## Flugzeugposition
+Werte für
+- x, y # Int Werte. Der Raspi rechnet die lang- und longitude-Werte um und schickt $x und $y an den Pico
+{
+  "type": "change_plane_position",
+  "x": 0, 
+  "y": 0
+}
