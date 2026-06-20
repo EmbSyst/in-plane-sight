@@ -1,39 +1,16 @@
 from umqtt.simple import MQTTClient
 import time
 import json as JSON
+from wlanZugriff import *
 
-import network
+# mit Wlan verbinden
+connect_to_wlan()
 
-TIMEOUT = 100
-
-SSID = "embedded"
-PASSWORD = "c384c8c3"
-
-wlan = network.WLAN(network.STA_IF)
-wlan.active(True)
-
-if not wlan.isconnected():
-    print("Verbinde mit WLAN...")
-    wlan.connect(SSID, PASSWORD)
-
-    timeout = TIMEOUT
-    while not wlan.isconnected() and timeout > 0:
-        print("Warte auf Verbindung...")
-        time.sleep(1)
-        timeout -= 1
-
-if wlan.isconnected():
-    print("Verbunden!")
-    print("Netzwerk-Konfiguration:", wlan.ifconfig())
-else:
-    print("Verbindung fehlgeschlagen")
-    sys.exit(-1)
-    
 # MQTT broker (public test broker)
 BROKER = "test.mosquitto.org"
 
 CLIENT_ID = "micropython_test_client"
-TOPIC = b"hello/world"
+TOPIC = b"in-plane-sight"
 
 def callback(topic, msg):
     print("Message received!")
