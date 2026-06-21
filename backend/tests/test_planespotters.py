@@ -42,7 +42,7 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             def json(self):
                 return payload
 
-        async def _fake_get(_url: str):
+        async def _fake_get(_url: str, **_kwargs):
             return _Resp()
 
         with patch("backend.app.services.planespotters.httpx.AsyncClient") as MockClient:
@@ -126,7 +126,7 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             def json(self):
                 return payload
 
-        async def _fake_get(_url: str):
+        async def _fake_get(_url: str, **_kwargs):
             return _Resp()
 
         with patch("backend.app.services.planespotters.httpx.AsyncClient") as MockClient:
@@ -154,7 +154,7 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             def json(self):
                 return json.loads("{}")
 
-        async def _fake_get(_url: str):
+        async def _fake_get(_url: str, **_kwargs):
             return _Resp404()
 
         with patch("backend.app.services.planespotters.httpx.AsyncClient") as MockClient:
