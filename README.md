@@ -13,7 +13,7 @@ Die geplante Pipeline sieht so aus:
 * RasPi Backend liest `/tmp/aircraft.json` regelmäßig (z.B. alle 1s) und normalisiert die wichtigsten Felder (Flight, Lat/Lon, Altitude, Speed)
 * Touch-UI zeigt alle aktuell getrackten Flugzeuge an (kiosk-/touch-optimiert)
 * Auswahl eines Flugzeugs auf dem Touchscreen (Tap) sendet die Selection an das Backend
-* Backend leitet `lat/lon` (und Metadaten) über WLAN an den Holo-Globe-Controller weiter (modular: HTTP oder UDP)
+* Backend publiziert die ausgewählten Flugzeugdaten per MQTT an einen lokalen Broker auf dem Raspberry Pi; der Pico abonniert die relevanten Topics
 
 Das Repository befindet sich aktuell noch in einer frühen Phase und dient zunächst dazu, die geplante Struktur, den technischen Ablauf und die nächsten Entwicklungsschritte festzuhalten.
 
@@ -25,7 +25,7 @@ Unter `backend/` liegt ein schlankes FastAPI-Backend, das:
 
 * live Aircraft-Daten aus der lokalen Datei `/tmp/aircraft.json` (von `dump1090-fa` geschrieben) liest
 * die Daten als REST-API für das Touch-Frontend bereitstellt
-* bei Auswahl eines Flugzeugs dessen `lat/lon` modular an den Holo Globe weiterleitet (HTTP oder UDP, per ENV konfigurierbar)
+* bei Auswahl eines Flugzeugs dessen Daten an die Holo-Globe-Anbindung per MQTT publiziert
 * bei Auswahl eines Flugzeugs Metadaten und ein Foto über die Planespotters API nachlädt (inkl. Cache & Placeholder)
 
 **Touch-UI (Kiosk):**
@@ -61,7 +61,7 @@ chmod +x start.sh
 Overrides funktionieren inline:
 
 ```bash
-DUMP1090_FILE_PATH=/tmp/aircraft.json GLOBE_UDP_HOST=10.42.0.1 GLOBE_UDP_PORT=5005 ./start.sh
+DUMP1090_FILE_PATH=/tmp/aircraft.json ./start.sh
 
 # Systemposition (für Distanzberechnung in der UI):
 SYSTEM_LAT=49.121479 SYSTEM_LON=9.211960 ./start.sh
@@ -69,24 +69,65 @@ SYSTEM_LAT=49.121479 SYSTEM_LON=9.211960 ./start.sh
 
 Standardwerte in `start.sh`:
 * `DUMP1090_FILE_PATH=/tmp/aircraft.json`
-* `GLOBE_MODE=udp`
-* `GLOBE_UDP_HOST=10.42.0.1`
-* `GLOBE_UDP_PORT=5005`
+* `SYSTEM_LAT` / `SYSTEM_LON` für die Distanzberechnung im Frontend
+
+> **Hinweis:** Der MQTT-Broker wird separat auf dem Raspberry Pi betrieben und nicht über `start.sh` gestartet.
+
+### MQTT-Übertragung zum Pico
+
+* Auf dem Raspberry Pi läuft ein lokaler MQTT-Broker (Mosquitto).
+* Das Backend publiziert beim Auswählen eines Flugzeugs die relevanten Daten als MQTT-Nachricht.
+* Der Pico verbindet sich per WLAN mit dem Netzwerk und abonniert das passende Topic.
+
+Brokerkonfiguration:
+
+* **Broker Host:** `raspi5.local` oder alternativ die LAN-IP des Raspberry Pi
+* **Broker Port:** `1883`
+* **Broker Software:** Mosquitto
+
+Vorgeschlagene Topics:
+
+* `hologlobe/aircraft/selected` für das aktuell ausgewählte Flugzeug
+* `hologlobe/aircraft/test` für einfache Verbindungs- und LED-Tests
+
+Vorgeschlagene JSON-Payload für das ausgewählte Flugzeug:
+
+```json
+{
+  "hex": "4B1902",
+  "flight": "DLH123",
+  "lat": 49.121479,
+  "lon": 9.211960,
+  "altitude": 35000,
+  "speed": 420,
+  "distance_km": 12.4
+}
+```
+
+Die Topic-Namen und Payload-Struktur sind als praktikabler Startpunkt dokumentiert und koennen spaeter noch angepasst werden.
+
+
 
 ### Autostart (Boot-Konfiguration)
 
-Um das System auf dem Raspberry Pi (Ubuntu 24.04) vollautomatisch beim Hochfahren zu starten, sind zwei Komponenten eingerichtet: ein Hintergrunddienst für das Backend und ein Desktop-Autostart für das Kiosk-Frontend.
+Um das System auf dem Raspberry Pi (Ubuntu 24.04) vollautomatisch beim Hochfahren zu starten, sind drei Komponenten relevant: der lokale MQTT-Broker, das Backend und das Kiosk-Frontend.
 
 **1. Hintergrunddienste (Systemd)**
-Ein zentrales Skript startet `dump1090` und das FastAPI-Backend im Hintergrund. 
-* **Startup-Skript:** `/usr/local/bin/startup.sh`
-* **Systemd-Service:** `/etc/systemd/system/backend.service`
+
+* **MQTT-Broker:** z.B. `mosquitto.service`
+* **Backend-Startskript:** `/usr/local/bin/startup.sh`
+* **Backend-Service:** `/etc/systemd/system/backend.service`
 
 Steuern lässt sich der Dienst via Terminal:
-* Status prüfen: `sudo systemctl status backend.service`
-* Neu starten: `sudo systemctl restart backend.service`
+* MQTT-Broker Status prüfen: `sudo systemctl status mosquitto`
+* MQTT-Broker neu starten: `sudo systemctl restart mosquitto`
+* Backend Status prüfen: `sudo systemctl status backend.service`
+* Backend neu starten: `sudo systemctl restart backend.service`
+
+> **Hinweis:** `dump1090-fa` liefert weiterhin separat die Datei `/tmp/aircraft.json`; das Startskript dieser Web-App startet `dump1090` nicht automatisch.
 
 **2. Kiosk-Frontend (Desktop Autostart)**
+
 Sobald die grafische Oberfläche geladen ist, wird der Chromium-Browser automatisch im Vollbildmodus gestartet.
 * **Autostart-Datei:** `/home/pi/.config/autostart/kiosk.desktop`
 
@@ -128,7 +169,7 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 * **`backend/app/state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory), wie z.B. Konfigurationen für das Auslesen der dump1090-Daten.
 * **`backend/app/utils.py`**: Hilfsfunktionen, insbesondere für das sichere Auslesen von Umgebungsvariablen.
 * **`backend/app/services/dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei von dump1090.
-* **`backend/app/services/globe.py`**: Behandelt die Kommunikation (UDP oder HTTP) mit dem Mikrocontroller des Holo Globes.
+* **`backend/app/services/globe.py`**: Transportlogik für die Weitergabe der ausgewählten Flugzeugdaten an die Holo-Globe-Anbindung; die Gruppenarchitektur sieht dafür MQTT vor.
 * **`backend/app/services/planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern und Metadaten inkl. Caching-Logik.
 * **`backend/static/index.html`**: Das HTML-Grundgerüst der Benutzeroberfläche.
 * **`backend/static/styles.css`**: Das Styling, optimiert für Touchscreens und dunkle Umgebungen (Dark Mode).
@@ -139,7 +180,3 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 * **`architecture.md`**: Ein Mermaid.js-Diagramm, das die Systemarchitektur visuell darstellt.
 * **`start.sh`**: Ein Shell-Skript, das den einfachen und schnellen Start der Anwendung mit den korrekten Umgebungsvariablen ermöglicht.
 * **`README.md`**: Diese Dokumentation.
-
-
-
-Create a clean, minimal, high-end facial beauty report based on this photo. Use a black-on-white design with thin lines, rounded cards, and a luxury aesthetic. Include a simple contour line drawing of the face, an honest attractiveness analysis (symmetry, proportions, bone structure, skin, etc.), clear scores, strengths, areas for improvement, and actionable grooming/style recommendations. Keep it data-driven, visually refined, and not overly flattering

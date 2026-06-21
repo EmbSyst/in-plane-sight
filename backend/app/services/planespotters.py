@@ -48,6 +48,28 @@ _TYPE_MANUFACTURER_TOKENS = {
 }
 
 
+def _request_headers() -> dict[str, str]:
+    """
+    Build headers for Planespotters requests.
+
+    Some API/CDN edges reject anonymous client defaults and expect browser-like
+    headers such as Referer/Origin. These defaults can still be overridden via
+    environment variables if Planespotters changes its requirements.
+    """
+    return {
+        "accept": get_env("PLANESPOTTERS_ACCEPT", "application/json, text/plain, */*"),
+        "origin": get_env("PLANESPOTTERS_ORIGIN", "https://www.planespotters.net"),
+        "referer": get_env("PLANESPOTTERS_REFERER", "https://www.planespotters.net/"),
+        "user-agent": get_env(
+            "PLANESPOTTERS_USER_AGENT",
+            (
+                "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+        ),
+    }
+
+
 def _copy_model(model: Any, update: dict[str, Any]) -> Any:
     """
     Return a shallow copy of a Pydantic model with updated fields.
@@ -209,7 +231,7 @@ async def get_aircraft_metadata(hex_code: str) -> AircraftMetadata:
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s)) as client:
-            response = await client.get(url)
+            response = await client.get(url, headers=_request_headers())
             if response.status_code == 404:
                 meta = _placeholder(normalized)
             else:
