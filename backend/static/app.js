@@ -67,10 +67,24 @@ function normalizeHex(hex) {
   return String(hex || "").trim().toLowerCase();
 }
 
-function clearSelection() {
-  selectedHex = null;
-  selectedMeta = null;
-  renderDetails(null, null);
+async function unselectAircraft() {
+  const response = await fetch("/api/unselect", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Unselect failed: HTTP ${response.status}`);
+  }
+}
+
+async function clearSelection() {
+  try {
+    await unselectAircraft();
+  } finally {
+    selectedHex = null;
+    selectedMeta = null;
+    renderDetails(null, null);
+  }
 }
 
 function showToast(message, kind) {
@@ -159,7 +173,7 @@ function renderDetails(selected, meta) {
   closeBtn.textContent = "×";
   closeBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    clearSelection();
+    void clearSelection();
   });
 
   header.appendChild(title);

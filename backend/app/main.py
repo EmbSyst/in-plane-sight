@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse
 from .services.dump1090 import Dump1090Client
-from .services.globe import forward_to_globe
+from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport
 from .services.planespotters import get_aircraft_metadata
 from .services.system_position import get_system_position
 from .state import Dump1090State
@@ -28,6 +28,24 @@ from .utils import get_env, get_env_float
 
 
 STATIC_DIR = (Path(__file__).resolve().parent.parent / "static").resolve()
+
+
+def _aircraft_signature(aircraft) -> tuple[float | None, float | None, float | None, float | None]:
+    """Return the fields that matter for live globe republishing."""
+    return (aircraft.lat, aircraft.lon, aircraft.altitude, aircraft.speed)
+
+
+def _pick_selected_for_republish(state: Dump1090State, aircraft: list) -> tuple[object, tuple[float | None, float | None, float | None, float | None]] | None:
+    """Return the selected aircraft when its tracked position changed since the last publish."""
+    if not state.selected_hex:
+        return None
+    selected = next((a for a in aircraft if a.hex.lower() == state.selected_hex), None)
+    if selected is None:
+        return None
+    signature = _aircraft_signature(selected)
+    if signature == state.last_forwarded_signature:
+        return None
+    return selected, signature
 
 
 def create_app() -> FastAPI:
@@ -75,12 +93,23 @@ def create_app() -> FastAPI:
         while True:
             try:
                 aircraft, polled_at = await client.fetch_aircraft()
+                republish_selected = None
                 async with state.lock:
                     state.aircraft = aircraft
                     state.polled_at_unix_s = polled_at
                     state.error = None
+                    republish_selected = _pick_selected_for_republish(state, aircraft)
                 consecutive_failures = 0
                 sleep_s = poll_interval_s
+                if republish_selected is not None:
+                    selected, signature = republish_selected
+                    forward_result = await forward_to_globe(selected)
+                    if forward_result.sent:
+                        async with state.lock:
+                            if state.selected_hex == selected.hex.lower():
+                                current = next((a for a in state.aircraft if a.hex.lower() == state.selected_hex), None)
+                                if current is not None and _aircraft_signature(current) == signature:
+                                    state.last_forwarded_signature = signature
             except Exception as exc:
                 consecutive_failures += 1
                 logger.exception("dump1090 poll failed (consecutive=%s)", consecutive_failures)
@@ -99,13 +128,14 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _on_startup() -> None:
-        """Start the dump1090 polling loop."""
+        """Start the dump1090 polling loop and long-lived integrations."""
+        init_globe_transport()
         if app.state.poll_task is None:
             app.state.poll_task = asyncio.create_task(_poll_dump1090_loop())
 
     @app.on_event("shutdown")
     async def _on_shutdown() -> None:
-        """Stop the polling task cleanly."""
+        """Stop the polling task and long-lived integrations cleanly."""
         task: asyncio.Task | None = app.state.poll_task
         if task is not None:
             task.cancel()
@@ -113,6 +143,7 @@ def create_app() -> FastAPI:
                 await task
             except asyncio.CancelledError:
                 pass
+        shutdown_globe_transport()
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:
@@ -154,9 +185,27 @@ def create_app() -> FastAPI:
         if selected is None:
             raise HTTPException(status_code=404, detail="aircraft not found")
 
+        selected_hex = selected.hex.lower()
+        async with state.lock:
+            state.selected_hex = selected_hex
+            state.last_forwarded_signature = None
+
         forward_result = await forward_to_globe(selected)
+        if forward_result.sent:
+            async with state.lock:
+                if state.selected_hex == selected_hex:
+                    state.last_forwarded_signature = _aircraft_signature(selected)
         meta = await get_aircraft_metadata(selected.hex)
         return SelectResponse(ok=forward_result.sent, selected=selected, forward=forward_result, meta=meta)
+
+    @app.post("/api/unselect")
+    async def unselect_aircraft() -> dict[str, bool]:
+        """Clear the currently tracked aircraft so live republishing stops."""
+        state: Dump1090State = app.state.dump1090
+        async with state.lock:
+            state.selected_hex = None
+            state.last_forwarded_signature = None
+        return {"ok": True}
 
     @app.get("/api/aircraft/{hex_code}/metadata", response_model=AircraftMetadata)
     async def aircraft_metadata(hex_code: str) -> AircraftMetadata:
