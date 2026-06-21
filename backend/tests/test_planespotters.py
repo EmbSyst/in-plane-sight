@@ -63,6 +63,47 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(meta2.from_cache)
             self.assertEqual(instance.get.await_count, 1)
 
+    async def test_sends_browser_like_headers(self) -> None:
+        from backend.app.services import planespotters
+
+        payload = {
+            "photos": [
+                {
+                    "photographer": "Jane Doe",
+                    "aircraft": {"type": "Airbus A320-214"},
+                    "airline": {"name": "Example Air"},
+                    "thumbnail_large": {"src": "https://example.invalid/photo.jpg"},
+                }
+            ]
+        }
+
+        class _Resp:
+            status_code = 200
+
+            def raise_for_status(self) -> None:
+                return None
+
+            def json(self):
+                return payload
+
+        captured_headers: dict[str, str] = {}
+
+        async def _fake_get(_url: str, headers: dict[str, str] | None = None):
+            if headers:
+                captured_headers.update(headers)
+            return _Resp()
+
+        with patch("backend.app.services.planespotters.httpx.AsyncClient") as MockClient:
+            instance = MockClient.return_value.__aenter__.return_value
+            instance.get = AsyncMock(side_effect=_fake_get)
+
+            planespotters._CACHE.clear()
+            await planespotters.get_aircraft_metadata("4d22b4")
+
+            self.assertEqual(captured_headers.get("origin"), "https://www.planespotters.net")
+            self.assertEqual(captured_headers.get("referer"), "https://www.planespotters.net/")
+            self.assertIn("Mozilla/5.0", captured_headers.get("user-agent", ""))
+
     async def test_parses_type_and_airline_from_link_when_missing(self) -> None:
         from backend.app.services import planespotters
 

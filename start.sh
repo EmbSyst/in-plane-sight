@@ -28,8 +28,8 @@ export GLOBE_UDP_HOST="${GLOBE_UDP_HOST:-10.42.0.1}"
 export GLOBE_UDP_PORT="${GLOBE_UDP_PORT:-5005}"
 
 # Put in position of the system to show the correct distance to the aircrafts
-export SYSTEM_LAT="${SYSTEM_LAT:-48.5756}"
-export SYSTEM_LON="${SYSTEM_LON:-9.739}"
+export SYSTEM_LAT="${SYSTEM_LAT:-49.12194}"
+export SYSTEM_LON="${SYSTEM_LON:-9.21111}"
 
 export PLANESPOTTERS_BASE_URL="${PLANESPOTTERS_BASE_URL:-https://api.planespotters.net/pub/photos/hex}"
 export PLANESPOTTERS_TIMEOUT_S="${PLANESPOTTERS_TIMEOUT_S:-2.0}"
