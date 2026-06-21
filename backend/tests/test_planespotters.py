@@ -102,7 +102,10 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(captured_headers.get("origin"), "https://www.planespotters.net")
             self.assertEqual(captured_headers.get("referer"), "https://www.planespotters.net/")
-            self.assertIn("Mozilla/5.0", captured_headers.get("user-agent", ""))
+            self.assertEqual(
+                captured_headers.get("user-agent"),
+                "InPlaneSight/0.1 (+https://github.com/EmbSyst/in-plane-sight)",
+            )
 
     async def test_parses_type_and_airline_from_link_when_missing(self) -> None:
         from backend.app.services import planespotters

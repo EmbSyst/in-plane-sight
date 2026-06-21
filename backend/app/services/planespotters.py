@@ -56,17 +56,13 @@ def _request_headers() -> dict[str, str]:
     headers such as Referer/Origin. These defaults can still be overridden via
     environment variables if Planespotters changes its requirements.
     """
+    contact = get_env("PLANESPOTTERS_CONTACT", "https://github.com/EmbSyst/in-plane-sight")
+    user_agent_default = f"InPlaneSight/0.1 (+{contact})"
     return {
         "accept": get_env("PLANESPOTTERS_ACCEPT", "application/json, text/plain, */*"),
         "origin": get_env("PLANESPOTTERS_ORIGIN", "https://www.planespotters.net"),
         "referer": get_env("PLANESPOTTERS_REFERER", "https://www.planespotters.net/"),
-        "user-agent": get_env(
-            "PLANESPOTTERS_USER_AGENT",
-            (
-                "Mozilla/5.0 (X11; Linux armv7l) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ),
-        ),
+        "user-agent": get_env("PLANESPOTTERS_USER_AGENT", user_agent_default),
     }
 
 
