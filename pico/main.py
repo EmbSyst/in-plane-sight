@@ -33,7 +33,7 @@ MQTT_TOPIC = b"in-plane-sight"
 MQTT_KEEPALIVE_S = 60
 MQTT_RETRY_DELAY_S = 5
 
-DISPLAY_MODE_LIST = ["AUS", "EINE_FARBE", "FLUGZEUG", "REGENBOGEN"]
+DISPLAY_MODE_LIST = ["AUS", "EINE_FARBE", "UNUSED", "REGENBOGEN"]
 
 
 def _reset_after_delay(delay_s):
@@ -91,8 +91,11 @@ def handle_message(topic, raw_message):
             print("Invalid display mode:", mode)
     elif msg_type == "change_PWM":
         print("PWM update -> mode:", message.get("mode"), "rpm:", message.get("rpm"))
-    elif msg_type == "change_plane_position":
-        print("Plane position -> x:", message.get("x"), "y:", message.get("y"))
+    elif msg_type == "set_points":
+        points = message.get("points", [])
+        print("Set points ->", len(points), "points")
+        for p in points:
+            print("  - id:", p.get("id"), "lat:", p.get("lat"), "lon:", p.get("lon"), "color:", p.get("color"))
     else:
         print("Unknown message type:", msg_type)
 

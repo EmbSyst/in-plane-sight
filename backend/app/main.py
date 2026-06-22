@@ -18,9 +18,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse, DisplayModeRequest
+from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse, DisplayModeRequest, SetPointsRequest
 from .services.dump1090 import Dump1090Client
-from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport, publish_display_mode
+from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport, publish_display_mode, publish_set_points
 from .services.planespotters import get_aircraft_metadata
 from .services.system_position import get_system_position
 from .state import Dump1090State
@@ -213,6 +213,16 @@ def create_app() -> FastAPI:
         result = await publish_display_mode(request.mode, request.color)
         if not result.sent:
             raise HTTPException(status_code=500, detail=result.detail or "failed to set mode")
+        return {"ok": True}
+
+    @app.post("/api/globe/points")
+    async def set_globe_points(request: SetPointsRequest) -> dict[str, bool]:
+        """Send a list of points to be displayed on the globe."""
+        # Convert Pydantic models to dicts before passing to the publisher
+        points_dicts = [p.model_dump() for p in request.points]
+        result = await publish_set_points(points_dicts)
+        if not result.sent:
+            raise HTTPException(status_code=500, detail=result.detail or "failed to set points")
         return {"ok": True}
 
     @app.get("/api/aircraft/{hex_code}/metadata", response_model=AircraftMetadata)

@@ -5,7 +5,6 @@
 Werte für 
 - mode: 0 # LEDs aus
 - mode: 1 # fülle den gesamten Globus mit der übergebenen Farbe $color
-- mode: 2 # Färbe den Globus mit $color ein und zeige einen roten Punkt für das Flugzeug an Position (standardmäßig in der Mitte)
 - mode: 3 # RGB Regenbogen-Farbspiel
 - color: Liste aus 3 Int-Werten für RGB   
 {
@@ -24,11 +23,14 @@ Werte für
   "rpm": []
 }
 
-## Flugzeugposition
-Werte für
-- x, y # Int Werte. Der Raspi rechnet die lang- und longitude-Werte um und schickt $x und $y an den Pico
+## Flugzeugpositionen setzen (set_points)
+Werte für points:
+- id: String (z.B. Flight Callsign oder Hex-Code)
+- lat, lon: Float-Werte für Latitude und Longitude
+- color: Liste aus 3 Int-Werten für RGB
 {
-  "type": "change_plane_position",
-  "x": 0, 
-  "y": 0
+  "type": "set_points",
+  "points": [
+    { "id": "DLH123", "lat": 48.35, "lon": 11.78, "color": [255, 0, 0] }
+  ]
 }

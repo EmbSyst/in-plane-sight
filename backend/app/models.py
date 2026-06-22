@@ -82,14 +82,14 @@ class SelectResponse(BaseModel):
 class DisplayModeRequest(BaseModel):
     """Request payload for changing the globe display mode."""
 
-    mode: int = Field(..., description="Display mode (0=off, 1=solid color, 2=color+plane, 3=rainbow)")
+    mode: int = Field(..., description="Display mode (0=off, 1=solid color, 3=rainbow)")
     color: list[int] | None = Field(default=None, description="RGB color array (e.g. [255, 255, 255])")
 
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v: int) -> int:
-        if v not in (0, 1, 2, 3):
-            raise ValueError("mode must be one of [0, 1, 2, 3]")
+        if v not in (0, 1, 3):
+            raise ValueError("mode must be one of [0, 1, 3]")
         return v
 
     @field_validator("color")
@@ -102,3 +102,22 @@ class DisplayModeRequest(BaseModel):
                 if not (0 <= channel <= 255):
                     raise ValueError("color channels must be between 0 and 255")
         return v
+
+class Point(BaseModel):
+    id: str
+    lat: float
+    lon: float
+    color: list[int]
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: list[int]) -> list[int]:
+        if len(v) != 3:
+            raise ValueError("color must be a 3-element array")
+        for channel in v:
+            if not (0 <= channel <= 255):
+                raise ValueError("color channels must be between 0 and 255")
+        return v
+
+class SetPointsRequest(BaseModel):
+    points: list[Point]

@@ -113,13 +113,12 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.sent)
         self.assertEqual(result.mode, "mqtt")
         self.assertEqual(fake_client.connected_to, ("test.mosquitto.org", 1883, 60))
-        self.assertEqual(len(fake_client.published), 2)
+        self.assertEqual(len(fake_client.published), 1)
         self.assertEqual(fake_client.published[0][0], "in-plane-sight")
         self.assertEqual(fake_client.published[0][2:], (0, False))
-        self.assertIn('"type":"change_display_mode"', fake_client.published[0][1])
-        self.assertIn('"type":"change_plane_position"', fake_client.published[1][1])
-        self.assertIn('"x":0', fake_client.published[1][1])
-        self.assertIn('"y":0', fake_client.published[1][1])
+        self.assertIn('"type":"set_points"', fake_client.published[0][1])
+        self.assertIn('"id":"TEST"', fake_client.published[0][1])
+        self.assertIn('"lat":1.0', fake_client.published[0][1])
 
     async def test_mqtt_mode_reuses_persistent_client(self) -> None:
         from unittest.mock import patch
@@ -158,4 +157,4 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
             await globe.forward_to_globe(aircraft)
 
         self.assertEqual(fake_client.connect_calls, 1)
-        self.assertEqual(fake_client.publish_calls, 4)
+        self.assertEqual(fake_client.publish_calls, 2)

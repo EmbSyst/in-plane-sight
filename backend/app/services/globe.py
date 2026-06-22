@@ -27,28 +27,19 @@ _MQTT_CLIENT: mqtt.Client | None = None
 _MQTT_LOCK = threading.Lock()
 
 
-def _display_mode_payload() -> dict[str, Any]:
-    """Message that switches the globe into aircraft display mode."""
+def _set_points_payload(aircraft: Aircraft) -> dict[str, Any]:
+    """Message that sends a point to the pico for the selected plane."""
+    point_id = aircraft.flight.strip() if aircraft.flight and aircraft.flight.strip() else aircraft.hex
     return {
-        "type": "change_display_mode",
-        "mode": 2,
-        "color": [255, 255, 255],
-    }
-
-
-def _plane_position_payload(aircraft: Aircraft) -> dict[str, Any]:
-    """
-    Message for positioning an aircraft on the globe.
-
-    The final lat/lon -> x/y conversion is still pending, so this uses configurable
-    dummy coordinates for now. This keeps the MQTT path testable while the mapping is
-    still being defined by the team.
-    """
-    _ = aircraft
-    return {
-        "type": "change_plane_position",
-        "x": get_env_int("GLOBE_DUMMY_X", 0),
-        "y": get_env_int("GLOBE_DUMMY_Y", 0),
+        "type": "set_points",
+        "points": [
+            {
+                "id": point_id,
+                "lat": aircraft.lat,
+                "lon": aircraft.lon,
+                "color": [255, 255, 255],
+            }
+        ]
     }
 
 
@@ -162,6 +153,24 @@ async def publish_display_mode(mode: int, color: list[int] | None = None) -> Glo
     return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"display mode change not supported for mode={globe_mode!r}")
 
 
+async def publish_set_points(points: list[dict[str, Any]]) -> GlobeForwardResult:
+    """Publish arbitrary points to the globe."""
+    globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
+    
+    if globe_mode == "disabled":
+        return GlobeForwardResult(mode=globe_mode, sent=False, detail="globe forwarding disabled")
+        
+    message = {
+        "type": "set_points",
+        "points": points,
+    }
+    
+    if globe_mode == "mqtt":
+        return await _publish_mqtt_messages([message])
+        
+    return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"set points not supported for mode={globe_mode!r}")
+
+
 async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
     """
     Forward an aircraft selection to the globe.
@@ -182,8 +191,7 @@ async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
 
     if mode == "mqtt":
         messages = [
-            _display_mode_payload(),
-            _plane_position_payload(aircraft),
+            _set_points_payload(aircraft),
         ]
         return await _publish_mqtt_messages(messages)
 

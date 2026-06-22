@@ -415,5 +415,38 @@ async function setGlobeMode(mode, color = null) {
   }
 }
 
+async function setRandomPlane() {
+  try {
+    const lat = (Math.random() * 180) - 90;
+    const lon = (Math.random() * 360) - 180;
+    
+    const payload = {
+      points: [
+        {
+          id: "RND" + Math.floor(Math.random() * 1000),
+          lat: lat,
+          lon: lon,
+          color: [255, 255, 255]
+        }
+      ]
+    };
+    
+    const response = await fetch("/api/globe/points", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data && data.detail ? data.detail : `HTTP ${response.status}`);
+    }
+
+    showToast(`Random plane spot set successfully.`, "ok");
+  } catch (err) {
+    showToast(String(err && err.message ? err.message : err), "error");
+  }
+}
+
 setupTabs();
 loop();
