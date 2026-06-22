@@ -70,6 +70,63 @@ body {
   flex-direction: column;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.tabbar {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(16, 24, 38, 0.9);
+}
+
+.tab {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  flex: 1;
+  transition: all 0.2s ease;
+}
+
+.tab.active {
+  background: rgba(110, 231, 255, 0.15);
+  border-color: rgba(110, 231, 255, 0.3);
+  color: var(--accent);
+}
+
+.control-group {
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.control-group h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.button-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.muted-text {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+}
+
 .hint {
   order: 0;
   padding: 12px 14px;

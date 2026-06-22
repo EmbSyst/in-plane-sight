@@ -11,8 +11,7 @@ flowchart LR
     Snapshot["/tmp/aircraft.json\n(local JSON snapshot)"]
     SysPos["System Position\n(from env vars SYSTEM_LAT/SYSTEM_LON)"]
     MetaSvc["Planespotters Metadata\n(in-memory cache by hex)"]
-    GlobeSvc["MQTT Publish Service\npublishes selected aircraft data"]
-    Broker["Local MQTT Broker\nMosquitto on RasPi\nhost: raspi5.local / RasPi IP\nport: 1883"]
+    GlobeSvc["MQTT Publish Service\npublishes globe messages"]
     StartScript["start.sh\n(runs uvicorn)"]
   end
 
@@ -20,8 +19,9 @@ flowchart LR
     Dump1090["dump1090-fa\nwrites /tmp/aircraft.json (RAM disk)"]
   end
 
-  subgraph Internet["Internet (optional)"]
+  subgraph Internet["Internet"]
     Planespotters["Planespotters API\n/pub/photos/hex/{hex}"]
+    Broker["Public MQTT Broker\ntest.mosquitto.org:1883"]
   end
 
   subgraph Globe["Holo Globe Microcontroller"]
@@ -45,8 +45,10 @@ flowchart LR
   MetaSvc -->|"HTTP GET (cached)"| Planespotters
 
   API -->|"on selection"| GlobeSvc
-  GlobeSvc -->|"MQTT publish\nproposed topic:\nhologlobe/aircraft/selected"| Broker
-  Broker -->|"MQTT subscribe\nproposed topic:\nhologlobe/aircraft/selected"| MCU
+  GlobeSvc -->|"MQTT publish to topic\nin-plane-sight"| Broker
+  Broker -->|"MQTT subscribe\nin-plane-sight"| MCU
+
+  GlobeSvc -->|"JSON message types:\nchange_display_mode\nchange_PWM\nchange_plane_position"| Broker
 
   StartScript -->|"exec"| API
 ```

@@ -23,3 +23,5 @@ class Dump1090State:
     aircraft: list[Aircraft] = field(default_factory=list)
     polled_at_unix_s: float | None = None
     error: str | None = None
+    selected_hex: str | None = None
+    last_forwarded_signature: tuple[float | None, float | None, float | None, float | None] | None = None

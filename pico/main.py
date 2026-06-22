@@ -1,98 +1,138 @@
+"""
+MicroPython entrypoint for the Pico.
+
+- Connects to Wi-Fi on boot
+- Connects to the public MQTT broker
+- Subscribes to the shared topic used by the backend
+- Keeps reconnecting if Wi-Fi or MQTT drops
+
+Before uploading this file to the Pico, set WIFI_SSID and WIFI_PASSWORD locally.
+Do not commit real credentials to git.
+"""
+
 import json
 import time
 
 import network
-import neopixel
-from machine import Pin
 from umqtt.simple import MQTTClient
+
+try:
+    import machine
+except ImportError:  # pragma: no cover - MicroPython provides this on device
+    machine = None
+
 
 WIFI_SSID = ""
 WIFI_PASSWORD = ""
-WIFI_TIMEOUT_S = 20
+WIFI_TIMEOUT_S = 30
 
 MQTT_BROKER = "test.mosquitto.org"
 MQTT_PORT = 1883
 MQTT_CLIENT_ID = b"in-plane-sight-pico"
 MQTT_TOPIC = b"in-plane-sight"
+MQTT_KEEPALIVE_S = 60
+MQTT_RETRY_DELAY_S = 5
 
-LED_PIN = 18
-NUM_LEDS = 6
-BPP = 4
-
-
-def set_all(pixels, r, g, b, w=0):
-    for i in range(NUM_LEDS):
-        pixels[i] = (r, g, b, w)
-    pixels.write()
+DISPLAY_MODE_LIST = ["AUS", "EINE_FARBE", "FLUGZEUG", "REGENBOGEN"]
 
 
-def connect_wifi():
+def _reset_after_delay(delay_s):
+    """Reset the Pico after a delay if machine.reset is available."""
+    print("Reset in", delay_s, "seconds")
+    time.sleep(delay_s)
+    if machine is not None:
+        machine.reset()
+    raise RuntimeError("reset requested but machine.reset unavailable")
+
+
+def connect_to_wifi():
+    """Connect to the configured Wi-Fi and return the active wlan object."""
     if not WIFI_SSID:
-        raise RuntimeError("WIFI_SSID not set")
+        raise RuntimeError("WIFI_SSID is empty; set Wi-Fi credentials in pico/main.py before upload")
 
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+
     if wlan.isconnected():
+        print("Wi-Fi already connected:", wlan.ifconfig())
         return wlan
 
+    print("Connecting to Wi-Fi:", WIFI_SSID)
     wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+
     start = time.time()
     while not wlan.isconnected():
-        if time.time() - start > WIFI_TIMEOUT_S:
-            raise RuntimeError("wifi timeout")
-        time.sleep(0.5)
+        if time.time() - start >= WIFI_TIMEOUT_S:
+            raise RuntimeError("Wi-Fi connection timed out")
+        time.sleep(1)
+
+    print("Wi-Fi connected:", wlan.ifconfig())
     return wlan
 
 
-def main():
-    pixels = neopixel.NeoPixel(Pin(LED_PIN, Pin.OUT), NUM_LEDS, bpp=BPP)
-    set_all(pixels, 0, 0, 0, 0)
+def handle_message(topic, raw_message):
+    """Parse and handle one incoming MQTT message."""
+    print("Message received on topic:", topic)
+    print("Raw payload:", raw_message)
 
-    wlan = connect_wifi()
-    set_all(pixels, 0, 0, 32, 0)
-    print("wifi:", wlan.ifconfig())
+    try:
+        message = json.loads(raw_message)
+    except Exception as exc:
+        print("JSON parse failed:", exc)
+        return
 
-    def on_msg(topic, msg):
-        print("topic:", topic)
-        print("msg:", msg)
+    msg_type = message.get("type")
+    if msg_type == "change_display_mode":
+        mode = int(message.get("mode", -1))
+        color = message.get("color", [255, 255, 255])
+        if 0 <= mode < len(DISPLAY_MODE_LIST):
+            print("Display mode ->", DISPLAY_MODE_LIST[mode], "color =", color)
+        else:
+            print("Invalid display mode:", mode)
+    elif msg_type == "change_PWM":
+        print("PWM update -> mode:", message.get("mode"), "rpm:", message.get("rpm"))
+    elif msg_type == "change_plane_position":
+        print("Plane position -> x:", message.get("x"), "y:", message.get("y"))
+    else:
+        print("Unknown message type:", msg_type)
+
+
+def mqtt_loop():
+    """Maintain one MQTT connection and process messages until it fails."""
+    client = MQTTClient(
+        client_id=MQTT_CLIENT_ID,
+        server=MQTT_BROKER,
+        port=MQTT_PORT,
+        keepalive=MQTT_KEEPALIVE_S,
+    )
+    client.set_callback(handle_message)
+
+    print("Connecting to MQTT broker:", MQTT_BROKER, "port", MQTT_PORT)
+    client.connect()
+    client.subscribe(MQTT_TOPIC)
+    print("Subscribed to topic:", MQTT_TOPIC)
+
+    try:
+        while True:
+            client.check_msg()
+            time.sleep(0.2)
+    finally:
         try:
-            obj = json.loads(msg)
+            client.disconnect()
         except Exception:
-            set_all(pixels, 64, 0, 0, 0)
-            return
+            pass
 
-        if not isinstance(obj, dict):
-            return
 
-        t = obj.get("type")
-        if t == "change_display_mode":
-            color = obj.get("color") or [255, 255, 255]
-            try:
-                r, g, b = int(color[0]), int(color[1]), int(color[2])
-            except Exception:
-                r, g, b = 255, 255, 255
-            set_all(pixels, max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)), 0)
-        elif t == "change_plane_position":
-            set_all(pixels, 0, 64, 0, 0)
-        elif t == "change_PWM":
-            set_all(pixels, 0, 0, 64, 0)
-
+def main():
+    """Boot entrypoint with reconnect loop for Wi-Fi and MQTT."""
     while True:
         try:
-            client = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER, port=MQTT_PORT, keepalive=60)
-            client.set_callback(on_msg)
-            client.connect()
-            client.subscribe(MQTT_TOPIC)
-            print("subscribed:", MQTT_TOPIC)
-            set_all(pixels, 0, 16, 0, 0)
-
-            while True:
-                client.check_msg()
-                time.sleep(0.2)
+            connect_to_wifi()
+            mqtt_loop()
         except Exception as exc:
-            print("mqtt loop failed:", exc)
-            set_all(pixels, 64, 0, 0, 0)
-            time.sleep(3)
+            print("Connection loop failed:", exc)
+            print("Retrying in", MQTT_RETRY_DELAY_S, "seconds")
+            time.sleep(MQTT_RETRY_DELAY_S)
 
 
 main()

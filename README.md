@@ -13,7 +13,7 @@ Die geplante Pipeline sieht so aus:
 * RasPi Backend liest `/tmp/aircraft.json` regelmäßig (z.B. alle 1s) und normalisiert die wichtigsten Felder (Flight, Lat/Lon, Altitude, Speed)
 * Touch-UI zeigt alle aktuell getrackten Flugzeuge an (kiosk-/touch-optimiert)
 * Auswahl eines Flugzeugs auf dem Touchscreen (Tap) sendet die Selection an das Backend
-* Backend publiziert die ausgewählten Flugzeugdaten per MQTT an einen lokalen Broker auf dem Raspberry Pi; der Pico abonniert die relevanten Topics
+* Backend publiziert die relevanten Holo-Globe-Daten per MQTT an einen öffentlichen Broker; der Pico empfängt diese Nachrichten als Subscriber
 
 Das Repository befindet sich aktuell noch in einer frühen Phase und dient zunächst dazu, die geplante Struktur, den technischen Ablauf und die nächsten Entwicklungsschritte festzuhalten.
 
@@ -25,7 +25,7 @@ Unter `backend/` liegt ein schlankes FastAPI-Backend, das:
 
 * live Aircraft-Daten aus der lokalen Datei `/tmp/aircraft.json` (von `dump1090-fa` geschrieben) liest
 * die Daten als REST-API für das Touch-Frontend bereitstellt
-* bei Auswahl eines Flugzeugs dessen Daten an die Holo-Globe-Anbindung per MQTT publiziert
+* bei Auswahl eines Flugzeugs die relevanten Daten in MQTT-Nachrichten für den Holo Globe übersetzt und publiziert
 * bei Auswahl eines Flugzeugs Metadaten und ein Foto über die Planespotters API nachlädt (inkl. Cache & Placeholder)
 
 **Touch-UI (Kiosk):**
@@ -71,52 +71,69 @@ Standardwerte in `start.sh`:
 * `DUMP1090_FILE_PATH=/tmp/aircraft.json`
 * `SYSTEM_LAT` / `SYSTEM_LON` für die Distanzberechnung im Frontend
 
-> **Hinweis:** Der MQTT-Broker wird separat auf dem Raspberry Pi betrieben und nicht über `start.sh` gestartet.
-
 ### MQTT-Übertragung zum Pico
 
-* Auf dem Raspberry Pi läuft ein lokaler MQTT-Broker (Mosquitto).
-* Das Backend publiziert beim Auswählen eines Flugzeugs die relevanten Daten als MQTT-Nachricht.
-* Der Pico verbindet sich per WLAN mit dem Netzwerk und abonniert das passende Topic.
+Die Kommunikation vom Raspberry Pi zum Pico ist aktuell MQTT-basiert und verwendet einen öffentlichen Broker:
 
-Brokerkonfiguration:
+* **Broker:** `test.mosquitto.org`
+* **Port:** `1883`
+* **Topic:** `in-plane-sight`
+* Der Pico verwendet im Testskript `umqtt.simple`, um sich mit dem Broker zu verbinden und das Topic zu abonnieren.
+* Die WLAN-Verbindung des Picos wird aktuell separat über `messages/wlanZugriff.py` hergestellt.
 
-* **Broker Host:** `raspi5.local` oder alternativ die LAN-IP des Raspberry Pi
-* **Broker Port:** `1883`
-* **Broker Software:** Mosquitto
+Die in `messages/message-list.txt` dokumentierten Nachrichtentypen sind:
 
-Vorgeschlagene Topics:
-
-* `hologlobe/aircraft/selected` für das aktuell ausgewählte Flugzeug
-* `hologlobe/aircraft/test` für einfache Verbindungs- und LED-Tests
-
-Vorgeschlagene JSON-Payload für das ausgewählte Flugzeug:
+**1. Anzeige-Modus des Globe**
 
 ```json
 {
-  "hex": "4B1902",
-  "flight": "DLH123",
-  "lat": 49.121479,
-  "lon": 9.211960,
-  "altitude": 35000,
-  "speed": 420,
-  "distance_km": 12.4
+  "type": "change_display_mode",
+  "mode": 0,
+  "color": [255, 255, 255]
 }
 ```
 
-Die Topic-Namen und Payload-Struktur sind als praktikabler Startpunkt dokumentiert und koennen spaeter noch angepasst werden.
+* `mode = 0`: LEDs aus
+* `mode = 1`: gesamten Globe mit `color` füllen
+* `mode = 2`: Globe mit `color` füllen und Flugzeugpunkt anzeigen
+* `mode = 3`: RGB-Regenbogenmodus
 
+**2. Motorsteuerung per PWM**
 
+```json
+{
+  "type": "change_PWM",
+  "mode": 0,
+  "rpm": []
+}
+```
+
+* `mode = 0`: Motor aus
+* `mode = 1`: PWM-Werte aus der gewünschten Drehzahl ableiten
+
+**3. Flugzeugposition auf dem Globe**
+
+```json
+{
+  "type": "change_plane_position",
+  "x": 0,
+  "y": 0
+}
+```
+
+* Der Raspberry Pi rechnet `lat/lon` in die für den Globe benötigten `x/y`-Koordinaten um und sendet diese an den Pico.
+
+Das vorhandene Testskript `messages/test mit umqtt.py` zeigt den aktuellen Pico-seitigen MQTT-Subscriber für diese Nachrichten.
 
 ### Autostart (Boot-Konfiguration)
 
-Um das System auf dem Raspberry Pi (Ubuntu 24.04) vollautomatisch beim Hochfahren zu starten, sind drei Komponenten relevant: der lokale MQTT-Broker, das Backend und das Kiosk-Frontend.
+Um das System auf dem Raspberry Pi vollautomatisch beim Hochfahren zu starten, sind zwei Komponenten eingerichtet: ein Hintergrunddienst für das Backend und ein isolierter Kiosk-Start für das Frontend.
 
 **1. Hintergrunddienste (Systemd)**
 
-* **MQTT-Broker:** z.B. `mosquitto.service`
-* **Backend-Startskript:** `/usr/local/bin/startup.sh`
-* **Backend-Service:** `/etc/systemd/system/backend.service`
+Ein zentrales Skript startet das FastAPI-Backend im Hintergrund, völlig unabhängig von der Bildschirmausgabe.
+* **Startup-Skript:** `/usr/local/bin/startup.sh`
+* **Systemd-Service:** `/etc/systemd/system/backend.service`
 
 Steuern lässt sich der Dienst via Terminal:
 * MQTT-Broker Status prüfen: `sudo systemctl status mosquitto`
@@ -126,12 +143,31 @@ Steuern lässt sich der Dienst via Terminal:
 
 > **Hinweis:** `dump1090-fa` liefert weiterhin separat die Datei `/tmp/aircraft.json`; das Startskript dieser Web-App startet `dump1090` nicht automatisch.
 
-**2. Kiosk-Frontend (Desktop Autostart)**
+**2. Kiosk-Frontend (Cage Wayland Compositor)**
 
-Sobald die grafische Oberfläche geladen ist, wird der Chromium-Browser automatisch im Vollbildmodus gestartet.
-* **Autostart-Datei:** `/home/pi/.config/autostart/kiosk.desktop`
+Um das System ressourcenschonend und "ausbruchsicher" (keine Taskleiste, keine Wischgesten) zu betreiben, verzichten wir auf einen kompletten Desktop. Stattdessen bootet der Raspberry Pi in die Textkonsole, loggt sich automatisch ein und startet den Browser isoliert über den Kiosk-Compositor **Cage**.
 
-> **Hinweis:** Der Kiosk-Autostart wartet initial einige Sekunden, um sicherzustellen, dass das Backend unter `localhost:8000` vollständig erreichbar ist, bevor die Seite aufgerufen wird.
+* **Autologin:** Konfiguriert über einen Getty-Override unter `/etc/systemd/system/getty@tty1.service.d/override.conf`
+* **Startbefehl:** Liegt in der Datei `~/.bash_profile` des Benutzers:
+  ```bash
+  if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+      cage -s -- bash -c "sleep 10 && chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8000"
+  fi
+  ```
+
+> **Hinweis:** Der `sleep 10` Befehl stellt sicher, dass der Backend-Dienst im Hintergrund vollständig hochgefahren und erreichbar ist, bevor der Browser die URL aufruft.
+
+**Zurück zum normalen Desktop wechseln (Wartungsmodus):**
+Falls für Anpassungen wieder die normale grafische Benutzeroberfläche (Desktop) benötigt wird, kann das System einfach per SSH oder Tastatur wieder umgestellt werden:
+1. Standard-Bootmodus auf "Desktop" setzen:
+   ```bash
+   sudo systemctl set-default graphical.target
+   ```
+2. Raspberry Pi neu starten:
+   ```bash
+   sudo reboot
+   ```
+*(Um nach der Wartung wieder in den Kiosk-Modus zurückzukehren, lautet der Befehl: `sudo systemctl set-default multi-user.target`)*
 
 ### Tests
 
@@ -148,7 +184,7 @@ python3 -m unittest discover -s backend/tests -p "test_*.py"
 Beim Tap auf ein Flugzeug ruft das Backend zusätzlich die Planespotters API anhand des `hex` Codes auf und liefert eine Bild-URL sowie (best-effort) `type` und `airline` zurück. Um Rate-Limits zu vermeiden, werden Ergebnisse pro `hex` im Backend gecacht; bei fehlendem Internet/keinen Fotos wird ein Placeholder-Bild genutzt.
 
 Optionale Umgebungsvariablen:
-* `PLANESPOTTERS_BASE_URL` (Default: `[https://api.planespotters.net/pub/photos/hex](https://api.planespotters.net/pub/photos/hex)`)
+* `PLANESPOTTERS_BASE_URL` (Default: `https://api.planespotters.net/pub/photos/hex`)
 * `PLANESPOTTERS_TIMEOUT_S` (Default: `2.0`)
 
 ### Lokale Datenquelle (dump1090 File)
@@ -169,7 +205,7 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 * **`backend/app/state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory), wie z.B. Konfigurationen für das Auslesen der dump1090-Daten.
 * **`backend/app/utils.py`**: Hilfsfunktionen, insbesondere für das sichere Auslesen von Umgebungsvariablen.
 * **`backend/app/services/dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei von dump1090.
-* **`backend/app/services/globe.py`**: Transportlogik für die Weitergabe der ausgewählten Flugzeugdaten an die Holo-Globe-Anbindung; die Gruppenarchitektur sieht dafür MQTT vor.
+* **`backend/app/services/globe.py`**: Behandelt die Weitergabe der Holo-Globe-Daten; in der aktuellen Gruppenarchitektur erfolgt die Übertragung per MQTT.
 * **`backend/app/services/planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern und Metadaten inkl. Caching-Logik.
 * **`backend/static/index.html`**: Das HTML-Grundgerüst der Benutzeroberfläche.
 * **`backend/static/styles.css`**: Das Styling, optimiert für Touchscreens und dunkle Umgebungen (Dark Mode).
@@ -178,5 +214,8 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 * **`backend/tests/test_*.py`**: Backend-Tests (API-Endpunkte, ENV-Parsing, Globe-Forwarding, Planespotters-Parsing/Cache).
 * **`backend/requirements.txt`**: Liste aller benötigten Python-Abhängigkeiten (z.B. fastapi, uvicorn, httpx).
 * **`architecture.md`**: Ein Mermaid.js-Diagramm, das die Systemarchitektur visuell darstellt.
+* **`messages/message-list.txt`**: Dokumentation der vorgesehenen MQTT-Nachrichtentypen für Globe, Motor und Flugzeugposition.
+* **`messages/test mit umqtt.py`**: Pico-Testskript für MQTT-Empfang über den öffentlichen Broker.
+* **`messages/wlanZugriff.py`**: Pico-Hilfsskript zum Aufbau der WLAN-Verbindung.
 * **`start.sh`**: Ein Shell-Skript, das den einfachen und schnellen Start der Anwendung mit den korrekten Umgebungsvariablen ermöglicht.
 * **`README.md`**: Diese Dokumentation.
