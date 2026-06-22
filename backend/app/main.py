@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse
 from .services.dump1090 import Dump1090Client
-from .services.globe import forward_to_globe
+from .services.globe import forward_to_globe, shutdown_globe_transport
 from .services.planespotters import get_aircraft_metadata
 from .services.system_position import get_system_position
 from .state import Dump1090State
@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
                 await task
             except asyncio.CancelledError:
                 pass
+        shutdown_globe_transport()
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:
