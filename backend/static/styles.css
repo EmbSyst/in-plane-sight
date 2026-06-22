@@ -193,7 +193,11 @@ body {
 }
 
 .details {
-  margin-top: 14px;
+  margin: 0 0 12px;
+}
+
+.details:empty {
+  display: none;
 }
 
 .detailsCard {
