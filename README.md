@@ -127,11 +127,11 @@ Das vorhandene Testskript `messages/test mit umqtt.py` zeigt den aktuellen Pico-
 
 ### Autostart (Boot-Konfiguration)
 
-Um das System auf dem Raspberry Pi (Ubuntu 24.04) vollautomatisch beim Hochfahren zu starten, sind zwei Komponenten eingerichtet: ein Hintergrunddienst für das Backend und ein Desktop-Autostart für das Kiosk-Frontend.
+Um das System auf dem Raspberry Pi vollautomatisch beim Hochfahren zu starten, sind zwei Komponenten eingerichtet: ein Hintergrunddienst für das Backend und ein isolierter Kiosk-Start für das Frontend.
 
 **1. Hintergrunddienste (Systemd)**
 
-Ein zentrales Skript startet das FastAPI-Backend im Hintergrund.
+Ein zentrales Skript startet das FastAPI-Backend im Hintergrund, völlig unabhängig von der Bildschirmausgabe.
 * **Startup-Skript:** `/usr/local/bin/startup.sh`
 * **Systemd-Service:** `/etc/systemd/system/backend.service`
 
@@ -139,11 +139,31 @@ Steuern lässt sich der Dienst via Terminal:
 * Status prüfen: `sudo systemctl status backend.service`
 * Neu starten: `sudo systemctl restart backend.service`
 
-**2. Kiosk-Frontend (Desktop Autostart)**
-Sobald die grafische Oberfläche geladen ist, wird der Chromium-Browser automatisch im Vollbildmodus gestartet.
-* **Autostart-Datei:** `/home/pi/.config/autostart/kiosk.desktop`
+**2. Kiosk-Frontend (Cage Wayland Compositor)**
 
-> **Hinweis:** Der Kiosk-Autostart wartet initial einige Sekunden, um sicherzustellen, dass das Backend unter `localhost:8000` vollständig erreichbar ist, bevor die Seite aufgerufen wird.
+Um das System ressourcenschonend und "ausbruchsicher" (keine Taskleiste, keine Wischgesten) zu betreiben, verzichten wir auf einen kompletten Desktop. Stattdessen bootet der Raspberry Pi in die Textkonsole, loggt sich automatisch ein und startet den Browser isoliert über den Kiosk-Compositor **Cage**.
+
+* **Autologin:** Konfiguriert über einen Getty-Override unter `/etc/systemd/system/getty@tty1.service.d/override.conf`
+* **Startbefehl:** Liegt in der Datei `~/.bash_profile` des Benutzers:
+  ```bash
+  if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+      cage -s -- bash -c "sleep 10 && chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8000"
+  fi
+  ```
+
+> **Hinweis:** Der `sleep 10` Befehl stellt sicher, dass der Backend-Dienst im Hintergrund vollständig hochgefahren und erreichbar ist, bevor der Browser die URL aufruft.
+
+**Zurück zum normalen Desktop wechseln (Wartungsmodus):**
+Falls für Anpassungen wieder die normale grafische Benutzeroberfläche (Desktop) benötigt wird, kann das System einfach per SSH oder Tastatur wieder umgestellt werden:
+1. Standard-Bootmodus auf "Desktop" setzen:
+   ```bash
+   sudo systemctl set-default graphical.target
+   ```
+2. Raspberry Pi neu starten:
+   ```bash
+   sudo reboot
+   ```
+*(Um nach der Wartung wieder in den Kiosk-Modus zurückzukehren, lautet der Befehl: `sudo systemctl set-default multi-user.target`)*
 
 ### Tests
 
@@ -160,7 +180,7 @@ python3 -m unittest discover -s backend/tests -p "test_*.py"
 Beim Tap auf ein Flugzeug ruft das Backend zusätzlich die Planespotters API anhand des `hex` Codes auf und liefert eine Bild-URL sowie (best-effort) `type` und `airline` zurück. Um Rate-Limits zu vermeiden, werden Ergebnisse pro `hex` im Backend gecacht; bei fehlendem Internet/keinen Fotos wird ein Placeholder-Bild genutzt.
 
 Optionale Umgebungsvariablen:
-* `PLANESPOTTERS_BASE_URL` (Default: `[https://api.planespotters.net/pub/photos/hex](https://api.planespotters.net/pub/photos/hex)`)
+* `PLANESPOTTERS_BASE_URL` (Default: `https://api.planespotters.net/pub/photos/hex`)
 * `PLANESPOTTERS_TIMEOUT_S` (Default: `2.0`)
 
 ### Lokale Datenquelle (dump1090 File)
