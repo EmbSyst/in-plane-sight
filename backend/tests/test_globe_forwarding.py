@@ -81,9 +81,11 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         os.environ["GLOBE_DUMMY_X"] = "0"
         os.environ["GLOBE_DUMMY_Y"] = "0"
 
+        forward_to_globe = self._forward_to_globe_or_skip()
+        from backend.app.services import globe as globe_module
+
         fake = _FakeClient()
-        with mock.patch("backend.app.services.globe.mqtt.Client", return_value=fake):
-            forward_to_globe = self._forward_to_globe_or_skip()
+        with mock.patch.object(globe_module.mqtt, "Client", return_value=fake):
             aircraft = SimpleNamespace(hex="abc123", flight="TEST", lat=1.0, lon=2.0, altitude=None, speed=None)
             result = await forward_to_globe(aircraft)
 

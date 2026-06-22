@@ -66,9 +66,12 @@ body {
 
 .main {
   padding: 12px 14px 80px;
+  display: flex;
+  flex-direction: column;
 }
 
 .hint {
+  order: 0;
   padding: 12px 14px;
   border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(110, 231, 255, 0.14) 0%, rgba(16, 24, 38, 0.4) 100%);
@@ -79,6 +82,7 @@ body {
 }
 
 .grid {
+  order: 2;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 12px;
@@ -193,6 +197,7 @@ body {
 }
 
 .details {
+  order: 1;
   margin: 0 0 12px;
 }
 
