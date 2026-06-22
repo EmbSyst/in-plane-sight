@@ -22,6 +22,17 @@ function $(id) {
   return el;
 }
 
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function scrollToTopAfterSelection() {
+  const behavior = prefersReducedMotion() ? "auto" : "smooth";
+  window.requestAnimationFrame(() => {
+    window.scrollTo({ top: 0, left: 0, behavior });
+  });
+}
+
 function formatNumber(value, unit) {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return unit ? `${value} ${unit}` : String(value);
@@ -308,6 +319,7 @@ async function onSelect(hex) {
     selectedHex = normalizeHex(hex);
     selectedMeta = result && result.meta ? result.meta : null;
     renderDetails(result && result.selected ? result.selected : null, selectedMeta);
+    scrollToTopAfterSelection();
     const forward = result && result.forward ? result.forward : null;
     if (forward && forward.sent) {
       showToast(`Forwarded ${hex.toUpperCase()} via ${forward.mode}.`, "ok");
