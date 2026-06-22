@@ -10,7 +10,7 @@ These models define:
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Aircraft(BaseModel):
@@ -77,3 +77,28 @@ class SelectResponse(BaseModel):
     selected: Aircraft | None
     forward: GlobeForwardResult
     meta: AircraftMetadata | None = None
+
+
+class DisplayModeRequest(BaseModel):
+    """Request payload for changing the globe display mode."""
+
+    mode: int = Field(..., description="Display mode (0=off, 1=solid color, 2=color+plane, 3=rainbow)")
+    color: list[int] | None = Field(default=None, description="RGB color array (e.g. [255, 255, 255])")
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: int) -> int:
+        if v not in (0, 1, 2, 3):
+            raise ValueError("mode must be one of [0, 1, 2, 3]")
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: list[int] | None) -> list[int] | None:
+        if v is not None:
+            if len(v) != 3:
+                raise ValueError("color must be a 3-element array")
+            for channel in v:
+                if not (0 <= channel <= 255):
+                    raise ValueError("color channels must be between 0 and 255")
+        return v

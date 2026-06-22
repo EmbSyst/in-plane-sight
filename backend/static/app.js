@@ -356,4 +356,52 @@ async function loop() {
   }
 }
 
+// Tab navigation logic
+function setupTabs() {
+  const tabAircrafts = $("tabAircrafts");
+  const tabGlobeControl = $("tabGlobeControl");
+  const viewAircrafts = $("viewAircrafts");
+  const viewGlobeControl = $("viewGlobeControl");
+
+  tabAircrafts.addEventListener("click", () => {
+    tabAircrafts.classList.add("active");
+    tabGlobeControl.classList.remove("active");
+    viewAircrafts.classList.remove("hidden");
+    viewGlobeControl.classList.add("hidden");
+  });
+
+  tabGlobeControl.addEventListener("click", () => {
+    tabGlobeControl.classList.add("active");
+    tabAircrafts.classList.remove("active");
+    viewGlobeControl.classList.remove("hidden");
+    viewAircrafts.classList.add("hidden");
+  });
+}
+
+// Globe Control logic
+async function setGlobeMode(mode, color = null) {
+  try {
+    const payload = { mode };
+    if (color) {
+      payload.color = color;
+    }
+    
+    const response = await fetch("/api/globe/mode", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data && data.detail ? data.detail : `HTTP ${response.status}`);
+    }
+
+    showToast(`Display mode ${mode} set successfully.`, "ok");
+  } catch (err) {
+    showToast(String(err && err.message ? err.message : err), "error");
+  }
+}
+
+setupTabs();
 loop();

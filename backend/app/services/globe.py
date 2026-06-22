@@ -136,6 +136,29 @@ async def _publish_mqtt_messages(messages: list[dict[str, Any]]) -> GlobeForward
     return await asyncio.to_thread(_publish)
 
 
+async def publish_display_mode(mode: int, color: list[int] | None = None) -> GlobeForwardResult:
+    """Publish a display mode change to the globe."""
+    globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
+    
+    if globe_mode == "disabled":
+        return GlobeForwardResult(mode=globe_mode, sent=False, detail="globe forwarding disabled")
+        
+    if color is None:
+        color = [255, 255, 255]
+        
+    message = {
+        "type": "change_display_mode",
+        "mode": mode,
+        "color": color,
+    }
+    
+    if globe_mode == "mqtt":
+        return await _publish_mqtt_messages([message])
+        
+    # We only implemented MQTT payload specs for these new modes in this project
+    return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"display mode change not supported for mode={globe_mode!r}")
+
+
 async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
     """
     Forward an aircraft selection to the globe.

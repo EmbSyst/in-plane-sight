@@ -18,12 +18,39 @@
       <div class="status" id="status">Connecting…</div>
     </header>
 
-    <main class="main">
+    <nav class="tabbar">
+      <button type="button" class="tab active" id="tabAircrafts">Aircrafts</button>
+      <button type="button" class="tab" id="tabGlobeControl">Globe Control</button>
+    </nav>
+
+    <main class="main" id="viewAircrafts">
       <section class="hint">
         Tap an aircraft to forward its position (lat/lon) to the Holo Globe.
       </section>
-      <section class="grid" id="grid"></section>
       <section class="details" id="details" aria-live="polite"></section>
+      <section class="grid" id="grid"></section>
+    </main>
+
+    <main class="main hidden" id="viewGlobeControl">
+      <section class="hint">
+        Control the display modes and settings of the Holo Globe.
+      </section>
+      
+      <div class="control-group">
+        <h3>Display Modes</h3>
+        <div class="button-grid">
+          <button type="button" class="button" onclick="setGlobeMode(0)">LEDs Off</button>
+          <button type="button" class="button" onclick="setGlobeMode(1, [255, 255, 255])">Solid White</button>
+          <button type="button" class="button" onclick="setGlobeMode(1, [255, 0, 0])">Solid Red</button>
+          <button type="button" class="button" onclick="setGlobeMode(2, [255, 255, 255])">Plane + White</button>
+          <button type="button" class="button" onclick="setGlobeMode(3)">Rainbow</button>
+        </div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Motor Control</h3>
+        <p class="muted-text">RPM control will be added here later.</p>
+      </div>
     </main>
 
     <div class="toast" id="toast" aria-live="polite"></div>
