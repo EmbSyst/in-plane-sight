@@ -1,141 +1,69 @@
-"""
-MicroPython entrypoint for the Pico.
+"""main.py - Dirigent fuer den SK6812-Test.
 
-- Connects to Wi-Fi on boot
-- Connects to the public MQTT broker
-- Subscribes to the shared topic used by the backend
-- Keeps reconnecting if Wi-Fi or MQTT drops
-
-Before uploading this file to the Pico, set WIFI_SSID and WIFI_PASSWORD locally.
-Do not commit real credentials to git.
+Laedt den Framebuffer aus dem Flash und gibt ihn synchron zur Drehung aus.
+Kooperative Hauptschleife: jedes Modul bekommt pro Runde kurz das Wort.
+MQTT (netz.py) ist in diesem Test bewusst deaktiviert.
 """
 
-import json
+import gc
+import struct
 import time
 
-import network
-from umqtt.simple import MQTTClient
-
-try:
-    import machine
-except ImportError:  # pragma: no cover - MicroPython provides this on device
-    machine = None
-
-
-WIFI_SSID = ""
-WIFI_PASSWORD = ""
-WIFI_TIMEOUT_S = 30
-
-MQTT_BROKER = "test.mosquitto.org"
-MQTT_PORT = 1883
-MQTT_CLIENT_ID = b"in-plane-sight-pico"
-MQTT_TOPIC = b"in-plane-sight"
-MQTT_KEEPALIVE_S = 60
-MQTT_RETRY_DELAY_S = 5
-
-DISPLAY_MODE_LIST = ["AUS", "EINE_FARBE", "UNUSED", "REGENBOGEN"]
+import config
+import state
+import rpm
+import motor
+import display
+import netz
 
 
-def _reset_after_delay(delay_s):
-    """Reset the Pico after a delay if machine.reset is available."""
-    print("Reset in", delay_s, "seconds")
-    time.sleep(delay_s)
-    if machine is not None:
-        machine.reset()
-    raise RuntimeError("reset requested but machine.reset unavailable")
-
-
-def connect_to_wifi():
-    """Connect to the configured Wi-Fi and return the active wlan object."""
-    if not WIFI_SSID:
-        raise RuntimeError("WIFI_SSID is empty; set Wi-Fi credentials in pico/main.py before upload")
-
-    wlan = network.WLAN(network.STA_IF)
-    wlan.active(True)
-
-    if wlan.isconnected():
-        print("Wi-Fi already connected:", wlan.ifconfig())
-        return wlan
-
-    print("Connecting to Wi-Fi:", WIFI_SSID)
-    wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-
-    start = time.time()
-    while not wlan.isconnected():
-        if time.time() - start >= WIFI_TIMEOUT_S:
-            raise RuntimeError("Wi-Fi connection timed out")
-        time.sleep(1)
-
-    print("Wi-Fi connected:", wlan.ifconfig())
-    return wlan
-
-
-def handle_message(topic, raw_message):
-    """Parse and handle one incoming MQTT message."""
-    print("Message received on topic:", topic)
-    print("Raw payload:", raw_message)
-
-    try:
-        message = json.loads(raw_message)
-    except Exception as exc:
-        print("JSON parse failed:", exc)
-        return
-
-    msg_type = message.get("type")
-    if msg_type == "change_display_mode":
-        mode = int(message.get("mode", -1))
-        color = message.get("color", [255, 255, 255])
-        if 0 <= mode < len(DISPLAY_MODE_LIST):
-            print("Display mode ->", DISPLAY_MODE_LIST[mode], "color =", color)
-        else:
-            print("Invalid display mode:", mode)
-    elif msg_type == "change_PWM":
-        print("PWM update -> mode:", message.get("mode"), "rpm:", message.get("rpm"))
-    elif msg_type == "set_points":
-        points = message.get("points", [])
-        print("Set points ->", len(points), "points")
-        for p in points:
-            print("  - id:", p.get("id"), "lat:", p.get("lat"), "lon:", p.get("lon"), "color:", p.get("color"))
-    else:
-        print("Unknown message type:", msg_type)
-
-
-def mqtt_loop():
-    """Maintain one MQTT connection and process messages until it fails."""
-    client = MQTTClient(
-        client_id=MQTT_CLIENT_ID,
-        server=MQTT_BROKER,
-        port=MQTT_PORT,
-        keepalive=MQTT_KEEPALIVE_S,
-    )
-    client.set_callback(handle_message)
-
-    print("Connecting to MQTT broker:", MQTT_BROKER, "port", MQTT_PORT)
-    client.connect()
-    client.subscribe(MQTT_TOPIC)
-    print("Subscribed to topic:", MQTT_TOPIC)
-
-    try:
-        while True:
-            client.check_msg()
-            time.sleep(0.2)
-    finally:
-        try:
-            client.disconnect()
-        except Exception:
-            pass
+def load_framebuffer(path):
+    """Liest framebuffer.bin, prueft den Header gegen config und liefert die
+    reinen Pixeldaten (ohne 16-Byte-Header) als memoryview zurueck."""
+    with open(path, "rb") as f:
+        data = f.read()
+    magic, version, cols, leds, bpl, bright = struct.unpack("<4sBHHBB", data[:11])
+    if magic != b"POVG":
+        raise ValueError("keine POVG-Datei: %s" % path)
+    if leds != config.NUM_LEDS or bpl != config.BYTES_PER_LED:
+        raise ValueError(
+            "Framebuffer (%d LEDs, %d B/LED) passt nicht zu config "
+            "(%d LEDs, %d B/LED) -> neu rendern!"
+            % (leds, bpl, config.NUM_LEDS, config.BYTES_PER_LED))
+    return memoryview(data)[16:], cols, leds
 
 
 def main():
-    """Boot entrypoint with reconnect loop for Wi-Fi and MQTT."""
+    rpm.init()
+    mot = motor.Motor()
+    disp = display.Display()
+    netz.init()
+
+    pixels, cols, leds = load_framebuffer(config.FRAMEBUFFER_FILE)
+    disp.set_framebuffer(pixels, cols, leds)
+    print("Framebuffer geladen: %d Spalten x %d LEDs" % (cols, leds))
+
+    last_seq = -1
+    last_print = time.ticks_ms()
     while True:
-        try:
-            connect_to_wifi()
-            mqtt_loop()
-        except Exception as exc:
-            print("Connection loop failed:", exc)
-            print("Retrying in", MQTT_RETRY_DELAY_S, "seconds")
-            time.sleep(MQTT_RETRY_DELAY_S)
+        disp.service()              # zeitkritisch -> zuerst
+        mot.service()
+        netz.service()
+        if state.seq != last_seq:    # GC in die Totzeit: einmal pro Umdrehung
+            last_seq = state.seq
+            gc.collect()
+
+        # --- RPM-/Motor-Log alle 500 ms (wie im alten Test) ---
+        if time.ticks_diff(time.ticks_ms(), last_print) >= 500:
+            last_print = time.ticks_ms()
+            prozent = state.duty / 65535 * 100
+            if state.period_us > 0:
+                rundzeit_ms = state.period_us / 1000
+                drehzahl = 60000000 / state.period_us
+                print("Motor: %.0f%%   RPM: %.0f   Rundzeit: %.1f ms"
+                      % (prozent, drehzahl, rundzeit_ms))
+            else:
+                print("Motor: %.0f%%   Warte auf Hall-Signal..." % prozent)
 
 
 main()
