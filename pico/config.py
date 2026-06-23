@@ -28,8 +28,8 @@ A_REVERSED    = False
 B_REVERSED    = False
 
 # --- Pins  (>>> EURE BELEGUNG EINTRAGEN <<<) -------------------------------
-DATA_PIN_A    = 14         # Signal Arm A  (eine 180-Grad-Seite)
-DATA_PIN_B    = 15         # Signal Arm B  (gegenueberliegende Seite)
+DATA_PIN_A    = 13         # Signal Arm A  (eine 180-Grad-Seite)
+DATA_PIN_B    = 14         # Signal Arm B  (gegenueberliegende Seite)
 HALL_PIN      = 16          # Open-Collector -> PULL_UP Pflicht
 MOTOR_PIN     = 10          # IRL2910 low-side (GP0 = UART0-TX, nie UART(0)!)
 BTN_FASTER    = 18          # Taster nach GND, PULL_UP
