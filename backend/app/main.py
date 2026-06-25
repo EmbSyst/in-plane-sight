@@ -129,7 +129,12 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def _on_startup() -> None:
         """Start the dump1090 polling loop and long-lived integrations."""
-        init_globe_transport()
+        # Globe forwarding is optional: a failure here must never abort app startup
+        # (otherwise the whole website goes down when the MQTT broker is unreachable).
+        try:
+            init_globe_transport()
+        except Exception:
+            logger.exception("globe transport init failed; continuing without globe forwarding")
         if app.state.poll_task is None:
             app.state.poll_task = asyncio.create_task(_poll_dump1090_loop())
 

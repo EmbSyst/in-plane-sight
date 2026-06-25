@@ -10,6 +10,7 @@ are kept as fallback while the group transitions the Pico integration.
 
 import asyncio
 import json
+import logging
 import socket
 import threading
 from typing import Any
@@ -20,8 +21,7 @@ import paho.mqtt.client as mqtt
 from ..models import Aircraft, GlobeForwardResult
 from ..utils import get_env, get_env_int
 
-_MQTT_CLIENT: mqtt.Client | None = None
-_MQTT_LOCK = threading.Lock()
+logger = logging.getLogger("in-plane-sight.globe")
 
 _MQTT_CLIENT: mqtt.Client | None = None
 _MQTT_LOCK = threading.Lock()
@@ -87,8 +87,16 @@ def init_globe_transport() -> None:
         client = mqtt.Client()
         if username:
             client.username_pw_set(username, password)
-        client.connect(host, port, 60)
-        client.loop_start()
+
+        # Connect in the background and never block or raise on startup: the broker
+        # may be unreachable (no WLAN/DNS yet, or a transient outage). paho's loop
+        # thread keeps retrying, so the web server always comes up regardless.
+        try:
+            client.connect_async(host, port, 60)
+            client.loop_start()
+        except Exception as exc:
+            logger.warning("globe MQTT init failed; continuing without globe forwarding: %s", exc)
+            return
         _MQTT_CLIENT = client
 
 

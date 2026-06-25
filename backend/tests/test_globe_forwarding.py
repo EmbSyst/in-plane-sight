@@ -82,7 +82,7 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
                 self.loop_started = False
                 self.disconnected = False
 
-            def connect(self, host, port, keepalive):
+            def connect_async(self, host, port, keepalive):
                 self.connected_to = (host, port, keepalive)
                 return 0
 
@@ -130,7 +130,7 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
                 self.connect_calls = 0
                 self.publish_calls = 0
 
-            def connect(self, host, port, keepalive):
+            def connect_async(self, host, port, keepalive):
                 self.connect_calls += 1
                 return 0
 
