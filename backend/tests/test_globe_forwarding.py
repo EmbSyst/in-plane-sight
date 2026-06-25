@@ -119,6 +119,7 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"type":"set_points"', fake_client.published[0][1])
         self.assertIn('"id":"TEST"', fake_client.published[0][1])
         self.assertIn('"lat":1.0', fake_client.published[0][1])
+        self.assertIn('"color":[255,0,0]', fake_client.published[0][1])
 
     async def test_mqtt_mode_reuses_persistent_client(self) -> None:
         from unittest.mock import patch

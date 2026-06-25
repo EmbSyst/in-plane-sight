@@ -37,7 +37,7 @@ def _set_points_payload(aircraft: Aircraft) -> dict[str, Any]:
                 "id": point_id,
                 "lat": aircraft.lat,
                 "lon": aircraft.lon,
-                "color": [255, 255, 255],
+                "color": [255, 0, 0],
             }
         ]
     }
