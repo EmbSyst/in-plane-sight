@@ -121,3 +121,17 @@ class Point(BaseModel):
 
 class SetPointsRequest(BaseModel):
     points: list[Point]
+
+
+class ChangePwmRequest(BaseModel):
+    """Request payload for motor PWM control (forwarded to the pico as 'change_PWM')."""
+
+    mode: int = Field(..., description="Motor mode (0=off, 1=run at rpm)")
+    rpm: int | None = Field(default=None, ge=0, description="Target RPM when mode=1")
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: int) -> int:
+        if v not in (0, 1):
+            raise ValueError("mode must be one of [0, 1]")
+        return v

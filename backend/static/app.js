@@ -448,5 +448,28 @@ async function setRandomPlane() {
   }
 }
 
+// Motor Control logic
+async function setMotorRpm(rpm) {
+  try {
+    const mode = rpm > 0 ? 1 : 0;
+    const payload = { mode, rpm };
+
+    const response = await fetch("/api/globe/motor", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data && data.detail ? data.detail : `HTTP ${response.status}`);
+    }
+
+    showToast(mode === 0 ? "Motor off." : `Motor set to ${rpm} rpm.`, "ok");
+  } catch (err) {
+    showToast(String(err && err.message ? err.message : err), "error");
+  }
+}
+
 setupTabs();
 loop();

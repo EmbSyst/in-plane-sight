@@ -179,6 +179,37 @@ async def publish_set_points(points: list[dict[str, Any]]) -> GlobeForwardResult
     return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"set points not supported for mode={globe_mode!r}")
 
 
+def _rpm_to_pwm_values(mode: int, rpm: int | None) -> list[int]:
+    """Convert a requested motor mode/rpm into the int list the pico expects.
+
+    mode 0 = motor off -> empty list.
+    mode 1 = run -> the target rpm as an int list. Currently a 1:1 passthrough;
+    this is the single place to introduce a real rpm->PWM conversion later.
+    """
+    if mode == 0 or rpm is None:
+        return []
+    return [int(rpm)]
+
+
+async def publish_change_pwm(mode: int, rpm: int | None = None) -> GlobeForwardResult:
+    """Publish a motor PWM (rpm) change to the globe/pico."""
+    globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
+
+    if globe_mode == "disabled":
+        return GlobeForwardResult(mode=globe_mode, sent=False, detail="globe forwarding disabled")
+
+    message = {
+        "type": "change_PWM",
+        "mode": mode,
+        "rpm": _rpm_to_pwm_values(mode, rpm),
+    }
+
+    if globe_mode == "mqtt":
+        return await _publish_mqtt_messages([message])
+
+    return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"change_PWM not supported for mode={globe_mode!r}")
+
+
 async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
     """
     Forward an aircraft selection to the globe.

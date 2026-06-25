@@ -158,3 +158,44 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(fake_client.connect_calls, 1)
         self.assertEqual(fake_client.publish_calls, 2)
+
+    async def test_change_pwm_publishes_motor_messages(self) -> None:
+        from unittest.mock import patch
+
+        globe = self._globe_module_or_skip()
+
+        class _FakeClient:
+            def __init__(self):
+                self.published = []
+
+            def connect_async(self, host, port, keepalive):
+                return 0
+
+            def loop_start(self):
+                return None
+
+            def publish(self, topic, payload, qos, retain):
+                self.published.append(payload)
+                return SimpleNamespace(rc=0)
+
+            def loop_stop(self):
+                return None
+
+            def disconnect(self):
+                return None
+
+        fake_client = _FakeClient()
+        os.environ["GLOBE_MODE"] = "mqtt"
+
+        with patch("backend.app.services.globe.mqtt.Client", return_value=fake_client):
+            globe.shutdown_globe_transport()
+            result_off = await globe.publish_change_pwm(0)
+            result_run = await globe.publish_change_pwm(1, 400)
+
+        self.assertTrue(result_off.sent)
+        self.assertTrue(result_run.sent)
+        self.assertIn('"type":"change_PWM"', fake_client.published[0])
+        self.assertIn('"mode":0', fake_client.published[0])
+        self.assertIn('"rpm":[]', fake_client.published[0])
+        self.assertIn('"mode":1', fake_client.published[1])
+        self.assertIn('"rpm":[400]', fake_client.published[1])

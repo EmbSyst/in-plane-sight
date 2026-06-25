@@ -18,9 +18,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse, DisplayModeRequest, SetPointsRequest
+from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse, DisplayModeRequest, SetPointsRequest, ChangePwmRequest
 from .services.dump1090 import Dump1090Client
-from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport, publish_display_mode, publish_set_points
+from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport, publish_display_mode, publish_set_points, publish_change_pwm
 from .services.planespotters import get_aircraft_metadata
 from .services.system_position import get_system_position
 from .state import Dump1090State
@@ -228,6 +228,14 @@ def create_app() -> FastAPI:
         result = await publish_set_points(points_dicts)
         if not result.sent:
             raise HTTPException(status_code=500, detail=result.detail or "failed to set points")
+        return {"ok": True}
+
+    @app.post("/api/globe/motor")
+    async def set_globe_motor(request: ChangePwmRequest) -> dict[str, bool]:
+        """Change the motor PWM (rpm) of the globe."""
+        result = await publish_change_pwm(request.mode, request.rpm)
+        if not result.sent:
+            raise HTTPException(status_code=500, detail=result.detail or "failed to set motor")
         return {"ok": True}
 
     @app.get("/api/aircraft/{hex_code}/metadata", response_model=AircraftMetadata)
