@@ -146,15 +146,24 @@ class Display:
         for p in pts:
             try:
                 lat = float(p["lat"])
-                lon = float(p["lon"]) % 360.0
+                # Die Weltkarte wird mit der linken Bildkante = -180 Grad gerendert
+                # (Greenwich mittig): render_worldmap bildet Spalte c auf die
+                # Bildposition c/NUM_COLUMNS ab -> geographische Laenge L liegt bei
+                # Spalte (L + 180). Das Overlay MUSS dieselbe Konvention nutzen,
+                # sonst sitzt der Punkt 180 Grad daneben (Flug ueber DE -> Anzeige
+                # ueber Amerika/Pazifik). Feinausrichtung weiter ueber COLUMN_OFFSET.
+                lon = (float(p["lon"]) + 180.0) % 360.0
                 col = _encode(p.get("color", [255, 0, 0]))
                 size = int(p.get("size", 1))
             except Exception as e:
                 print("display: Punkt fehlerhaft:", e)
                 continue
             # Arm A zeigt lon, Arm B den um 180 Grad versetzten Meridian
-            cA = int(round(lon / 360.0 * ncol)) % ncol
-            cB = int(round(((lon - 180.0) % 360.0) / 360.0 * ncol)) % ncol
+            # POINT_COLUMN_OFFSET schiebt NUR den Punkt relativ zur Karte
+            # (COLUMN_OFFSET bewegt Karte + Punkt gemeinsam).
+            poff = config.POINT_COLUMN_OFFSET
+            cA = (int(round(lon / 360.0 * ncol)) + poff) % ncol
+            cB = (int(round(((lon - 180.0) % 360.0) / 360.0 * ncol)) + poff) % ncol
             ledA = self._nearest_led(lat, 0, nper)
             ledB = self._nearest_led(lat, nper, nled)
             self._add_blob(ov, cA, ledA, col, size, 0, nper - 1)
@@ -214,7 +223,7 @@ class Display:
 
     # ----- Hauptarbeit -----------------------------------------------------
     def _current_column(self):
-        period = state.period_us
+        period = state.period_filt              # gefilterte (Median-)Periode aus rpm.service
         if period <= 0:
             return 0
         dt = time.ticks_diff(time.ticks_us(), state.last_pulse_us)

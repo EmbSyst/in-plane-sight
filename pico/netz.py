@@ -25,6 +25,19 @@ _connected = False
 _next_check = 0
 _next_ping = 0
 _next_retry = 0
+_net_idx = 0            # welches Netzwerk aus config.WIFI_NETWORKS gerade versucht wird
+
+
+def _current_net():
+    """Aktuelles (ssid, pwd) aus der Prioritaetsliste."""
+    nets = config.WIFI_NETWORKS
+    return nets[_net_idx % len(nets)]
+
+
+def _next_network():
+    """Auf das naechste hinterlegte Netzwerk umschalten (Haupt <-> Fallback)."""
+    global _net_idx
+    _net_idx += 1
 
 
 # --- eingehende Nachrichten -> state ---------------------------------------
@@ -81,9 +94,17 @@ def _ensure_wlan_started():
     if _wlan is None:
         _wlan = network.WLAN(network.STA_IF)
         _wlan.active(True)
-    if not _wlan.isconnected():
+        # WLAN-Power-Save AUS: sonst friert der Pico W im Leerlauf nach ~1-2 min ein
+        # (Socket/MQTT blockiert -> Board wirkt "tot"). Am USB faellt's nicht auf.
         try:
-            _wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
+            _wlan.config(pm=0xa11140)
+        except Exception as e:
+            print("netz: WLAN pm-Config Fehler:", e)
+    if not _wlan.isconnected():
+        ssid, pwd = _current_net()
+        try:
+            _wlan.connect(ssid, pwd)
+            print("netz: verbinde mit '%s'..." % ssid)
         except Exception as e:
             print("netz: WLAN connect Fehler:", e)
 
@@ -116,6 +137,7 @@ def _service_reconnect(now):
         return
     _schedule_retry(now)
     if _wlan is None or not _wlan.isconnected():
+        _next_network()                           # jeder Versuch das naechste Netz (Haupt<->Fallback)
         _ensure_wlan_started()                    # WLAN braucht ein paar Sekunden
         return                                    # -> erst beim naechsten Versuch MQTT
     try:
@@ -134,12 +156,20 @@ def _schedule_retry(now):
 def init():
     """Beim Boot aufrufen. Wartet kurz auf WLAN (Globe steht). Nie fatal."""
     global _connected
-    _ensure_wlan_started()
-    t = config.WIFI_TIMEOUT_S
-    while _wlan is not None and not _wlan.isconnected() and t > 0:
-        print("netz: warte auf WLAN...")
-        time.sleep(1)
-        t -= 1
+    # Netzwerke der Reihe nach versuchen: Haupt-AP, dann Fallback(s). Die Gesamt-
+    # Wartezeit bleibt ~WIFI_TIMEOUT_S (gleichmaessig auf die Netze aufgeteilt).
+    nets = config.WIFI_NETWORKS
+    per_net = max(1, config.WIFI_TIMEOUT_S // len(nets))
+    for _ in range(len(nets)):
+        _ensure_wlan_started()
+        t = per_net
+        while _wlan is not None and not _wlan.isconnected() and t > 0:
+            print("netz: warte auf WLAN '%s'..." % _current_net()[0])
+            time.sleep(1)
+            t -= 1
+        if _wlan is not None and _wlan.isconnected():
+            break
+        _next_network()                          # nicht verbunden -> naechstes (Fallback)
     if _wlan is not None and _wlan.isconnected():
         print("netz: WLAN ok", _wlan.ifconfig()[0])
         try:

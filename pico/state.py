@@ -6,7 +6,8 @@ EINER Zuweisung aktiv setzen).
 """
 
 # rpm -> display
-period_us     = 0       # gemessene Drehperiode (EMA, us); 0 = steht
+period_us     = 0       # rohe letzte Drehperiode (us, vom Hall-IRQ); 0 = steht
+period_filt   = 0       # gefilterte Periode (Median, von rpm.service) -> Anzeige/Log + IRQ-Referenz
 last_pulse_us = 0       # Zeitpunkt des letzten Hall-Pulses (ticks_us)
 seq           = 0       # zaehlt Umdrehungen hoch (fuer GC-Timing)
 

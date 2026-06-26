@@ -49,21 +49,41 @@ def main():
         disp.service()              # zeitkritisch -> zuerst
         mot.service()
         netz.service()
+        rpm.service()               # Median der Periode -> state.period_filt (Anzeige/Log/Referenz)
         if state.seq != last_seq:    # GC in die Totzeit: einmal pro Umdrehung
             last_seq = state.seq
             gc.collect()
 
-        # --- RPM-/Motor-Log alle 500 ms (wie im alten Test) ---
+        # --- RPM-/Motor-Log alle 500 ms: gefiltert (Median) | roh nebeneinander ---
         if time.ticks_diff(time.ticks_ms(), last_print) >= 500:
             last_print = time.ticks_ms()
             prozent = state.duty / 65535 * 100
-            if state.period_us > 0:
-                rundzeit_ms = state.period_us / 1000
-                drehzahl = 60000000 / state.period_us
-                print("Motor: %.0f%%   RPM: %.0f   Rundzeit: %.1f ms"
-                      % (prozent, drehzahl, rundzeit_ms))
+            pf = state.period_filt
+            pr = state.period_us
+            if pf > 0:
+                rpm_filt = 60000000 / pf
+                rpm_raw = 60000000 / pr if pr > 0 else 0
+                print("Motor: %.0f%%   RPM  gefiltert: %.0f | roh: %.0f   Rundzeit: %.1f ms"
+                      % (prozent, rpm_filt, rpm_raw, pf / 1000))
             else:
                 print("Motor: %.0f%%   Warte auf Hall-Signal..." % prozent)
 
 
-main()
+def _run():
+    """main() mit Crash-Protokoll. Standalone gibt es keine REPL -> bei einer
+    Python-Exception den Traceback nach crash.txt schreiben (nach dem Absturz mit
+    Thonny auslesen). Bleibt crash.txt LEER bzw. fehlt es nach einem Absturz, war
+    es KEIN Python-Fehler -> Hardware (Brownout/Stromversorgung) oder C-Lockup."""
+    import sys
+    try:
+        main()
+    except Exception as e:
+        try:
+            with open("crash.txt", "w") as f:
+                sys.print_exception(e, f)
+        except Exception:
+            pass
+        raise
+
+
+_run()

@@ -37,8 +37,18 @@ BTN_SLOWER    = 20          # Taster nach GND, PULL_UP
 
 # --- Laengengrad-Kalibrierung (am laufenden Globe einstellen) --------------
 # Im Render-Skript bleibt LON_OFFSET = 0 -> hier kalibrieren, ohne neu zu rendern.
-COLUMN_OFFSET = 0          # Spalten-Versatz: dreht die ganze Anzeige (Nullmeridian)
+COLUMN_OFFSET = 20          # Spalten-Versatz: dreht die ganze Anzeige (Karte UND Punkte)
 LON_DIRECTION = +1         # +1 / -1 je nach Drehrichtung
+# Nur den Punkt (Overlay) RELATIV zur Karte schieben - COLUMN_OFFSET bewegt beide
+# zusammen, hiermit den Punkt allein verschieben. Einheit = Spalten (1 ~ 5.6 Grad).
+# "etwas weiter rechts": +1/+2 probieren; geht's falsch herum, Vorzeichen drehen.
+POINT_COLUMN_OFFSET = 2
+
+# --- Anzeige-Stabilisierung (Hall-Periode) ---------------------------------
+# Median-Filter ueber die letzten N akzeptierten Hall-Perioden gegen Mess-Spikes
+# (z.B. 350->900->150 rpm), damit das POV-Bild nicht springt. Groesser = ruhiger,
+# aber traeger bei echten Drehzahlwechseln (N=5 toleriert bis zu 2 Spikes in Folge).
+PERIOD_MEDIAN_N = 5
 
 # --- Motor / Hall / Taster -------------------------------------------------
 MOTOR_FREQ    = 3906       # PWM-Frequenz (Hz) - wie im funktionierenden Test
@@ -49,11 +59,25 @@ MIN_PERIOD_US = 10000      # Hall-Entprellung (~10ms wie ENTPRELL_MS; kuerzere P
 HALL_MAX_SKIP = 3          # Ausreisser-Schutz: hoechstens so viele unplausible Pulse
                            #   am Stueck verwerfen, dann annehmen (kein Festklemmen)
 
+# --- change_PWM (MQTT, Web-UI): feste rpm -> PWM-Umrechnung -----------------
+# Gilt NUR fuer den MQTT-Pfad. Direkte (offene) Umrechnung rpm -> duty_u16:
+# KEIN Hochregeln, KEINE Hall-Rueckkopplung. Auf RPM_DUTY_CAP begrenzt.
+# Die zwei Hardware-Taster bleiben unveraendert (manuelle Duty-Steuerung).
+# Faktor aus Referenz 13% duty ~= 350 rpm  ->  0.13*65535/350 ~= 24.3 duty/rpm.
+# Feste Werte:  200->4860   400->9720   600->14580   (alle <= CAP)
+#               800->19440, 1000->24300  -> am CAP (16384) gedeckelt
+RPM_DUTY_PER_RPM = 24.3       # duty_u16 je rpm (am Hall-Log auf dem Aufbau kalibrieren)
+RPM_DUTY_CAP     = 16384      # Failsafe: max. Duty (~25% von 65535; ~knapp ueber 600 rpm)
+
 # --- WLAN / MQTT (netz.py) -------------------------------------------------
 # Echte Zugangsdaten NICHT ins git committen.
-WIFI_SSID        = "embedded"
-WIFI_PASSWORD    = "c384c8c3"
-WIFI_TIMEOUT_S   = 30          # Boot: max. Wartezeit auf WLAN (danach laeuft Globe trotzdem)
+# Netzwerke in Prioritaetsreihenfolge: erst Haupt-AP, dann Fallback(s).
+# Wird der Haupt-AP nicht gefunden, schaltet netz.py automatisch aufs naechste.
+WIFI_NETWORKS = [
+    ("embedded", "c384c8c3"),
+    ("in-plane-sight", "planespotter"),
+]
+WIFI_TIMEOUT_S   = 30          # Boot: max. Gesamt-Wartezeit auf WLAN (auf die Netze aufgeteilt)
 
 MQTT_BROKER      = "test.mosquitto.org"
 MQTT_PORT        = 1883
