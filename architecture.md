@@ -31,6 +31,8 @@ flowchart LR
   Browser --> UI
   UI -->|"GET /api/aircraft (1s)"| API
   UI -->|"POST /api/select {hex}"| API
+  UI -->|"POST /api/globe/mode {mode}"| API
+  UI -->|"POST /api/globe/points {points}"| API
 
   API --> Poller
   Poller --> Cache
@@ -44,11 +46,11 @@ flowchart LR
   API -->|"on selection\n(fetch meta + cache)"| MetaSvc
   MetaSvc -->|"HTTP GET (cached)"| Planespotters
 
-  API -->|"on selection"| GlobeSvc
+  API -->|"on selection or position change"| GlobeSvc
   GlobeSvc -->|"MQTT publish to topic\nin-plane-sight"| Broker
   Broker -->|"MQTT subscribe\nin-plane-sight"| MCU
 
-  GlobeSvc -->|"JSON message types:\nchange_display_mode\nchange_PWM\nchange_plane_position"| Broker
+  GlobeSvc -->|"JSON message types:\nchange_display_mode\nchange_PWM\nset_points"| Broker
 
   StartScript -->|"exec"| API
 ```

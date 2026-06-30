@@ -15,8 +15,6 @@ Die geplante Pipeline sieht so aus:
 * Auswahl eines Flugzeugs auf dem Touchscreen (Tap) sendet die Selection an das Backend
 * Backend publiziert die relevanten Holo-Globe-Daten per MQTT an einen öffentlichen Broker; der Pico empfängt diese Nachrichten als Subscriber
 
-Das Repository befindet sich aktuell noch in einer frühen Phase und dient zunächst dazu, die geplante Struktur, den technischen Ablauf und die nächsten Entwicklungsschritte festzuhalten.
-
 ---
 
 ## RasPi Control App (lokale Web-App)
@@ -78,8 +76,6 @@ Die Kommunikation vom Raspberry Pi zum Pico ist aktuell MQTT-basiert und verwend
 * **Broker:** `test.mosquitto.org`
 * **Port:** `1883`
 * **Topic:** `in-plane-sight`
-* Der Pico verwendet im Testskript `umqtt.simple`, um sich mit dem Broker zu verbinden und das Topic zu abonnieren.
-* Die WLAN-Verbindung des Picos wird aktuell separat über `messages/wlanZugriff.py` hergestellt.
 
 Die in `messages/message-list.txt` dokumentierten Nachrichtentypen sind:
 
@@ -95,7 +91,6 @@ Die in `messages/message-list.txt` dokumentierten Nachrichtentypen sind:
 
 * `mode = 0`: LEDs aus
 * `mode = 1`: gesamten Globe mit `color` füllen
-* `mode = 2`: Globe mit `color` füllen und Flugzeugpunkt anzeigen
 * `mode = 3`: RGB-Regenbogenmodus
 
 **2. Motorsteuerung per PWM**
@@ -111,19 +106,18 @@ Die in `messages/message-list.txt` dokumentierten Nachrichtentypen sind:
 * `mode = 0`: Motor aus
 * `mode = 1`: PWM-Werte aus der gewünschten Drehzahl ableiten
 
-**3. Flugzeugposition auf dem Globe**
+**3. Flugzeugpositionen setzen (set_points)**
 
 ```json
 {
-  "type": "change_plane_position",
-  "x": 0,
-  "y": 0
+  "type": "set_points",
+  "points": [
+    { "id": "DLH123", "lat": 48.35, "lon": 11.78, "color": [255, 255, 255] }
+  ]
 }
 ```
 
-* Der Raspberry Pi rechnet `lat/lon` in die für den Globe benötigten `x/y`-Koordinaten um und sendet diese an den Pico.
-
-Das vorhandene Testskript `messages/test mit umqtt.py` zeigt den aktuellen Pico-seitigen MQTT-Subscriber für diese Nachrichten.
+* Der Raspberry Pi extrahiert Längen- und Breitengrad sowie die Flugnummer aus den ADS-B Daten und sendet diese an den Pico. Der Pico kümmert sich um die Umrechnung auf den Framebuffer.
 
 ### Autostart (Boot-Konfiguration)
 
@@ -200,22 +194,25 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 
 * **`.github/workflows/ci.yml`**: Definition der GitHub Actions CI/CD-Pipeline, die bei jedem Push und Pull Request automatisch die Tests ausführt.
 * **`backend/`**: Enthält den gesamten Backend- und Frontend-Code.
-* **`backend/app/main.py`**: Der Haupteinstiegspunkt der Anwendung. Definiert die REST-API-Endpunkte (`/api/aircraft`, `/api/select`) und startet den Hintergrund-Poller.
-* **`backend/app/models.py`**: Pydantic-Datenmodelle (z.B. `Aircraft`, `AircraftMetadata`) für Validierung und Typensicherheit.
-* **`backend/app/state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory), wie z.B. Konfigurationen für das Auslesen der dump1090-Daten.
+* **`backend/app/main.py`**: Der Haupteinstiegspunkt der Anwendung. Definiert die REST-API-Endpunkte (`/api/aircraft`, `/api/select`, `/api/globe/mode`, `/api/globe/points`) und startet den Hintergrund-Poller.
+* **`backend/app/models.py`**: Pydantic-Datenmodelle für Validierung und Typensicherheit (z.B. `Aircraft`, `SetPointsRequest`, `DisplayModeRequest`).
+* **`backend/app/state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory).
 * **`backend/app/utils.py`**: Hilfsfunktionen, insbesondere für das sichere Auslesen von Umgebungsvariablen.
-* **`backend/app/services/dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei von dump1090.
-* **`backend/app/services/globe.py`**: Behandelt die Weitergabe der Holo-Globe-Daten; in der aktuellen Gruppenarchitektur erfolgt die Übertragung per MQTT.
-* **`backend/app/services/planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern und Metadaten inkl. Caching-Logik.
-* **`backend/static/index.html`**: Das HTML-Grundgerüst der Benutzeroberfläche.
-* **`backend/static/styles.css`**: Das Styling, optimiert für Touchscreens und dunkle Umgebungen (Dark Mode).
-* **`backend/static/app.js`**: Die JavaScript-Logik des Frontends. Ruft Daten vom Backend ab und aktualisiert die UI.
-* **`backend/static/aircraft-placeholder.svg`**: Ein Fallback-Bild (Platzhalter), falls für ein Flugzeug kein Foto über die Planespotters API gefunden wird.
-* **`backend/tests/test_*.py`**: Backend-Tests (API-Endpunkte, ENV-Parsing, Globe-Forwarding, Planespotters-Parsing/Cache).
-* **`backend/requirements.txt`**: Liste aller benötigten Python-Abhängigkeiten (z.B. fastapi, uvicorn, httpx).
+* **`backend/app/services/dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei.
+* **`backend/app/services/globe.py`**: Behandelt die Weitergabe der Holo-Globe-Daten per MQTT (Display Modes und Set Points).
+* **`backend/app/services/planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern.
+* **`backend/static/`**: Die Dateien der Benutzeroberfläche (`index.html`, `styles.css`, `app.js`). Beinhaltet jetzt zwei Tabs ("Aircrafts" und "Globe Control").
+* **`backend/tests/test_*.py`**: Backend-Tests.
+* **`backend/requirements.txt`**: Liste aller benötigten Python-Abhängigkeiten.
 * **`architecture.md`**: Ein Mermaid.js-Diagramm, das die Systemarchitektur visuell darstellt.
-* **`messages/message-list.txt`**: Dokumentation der vorgesehenen MQTT-Nachrichtentypen für Globe, Motor und Flugzeugposition.
-* **`messages/test mit umqtt.py`**: Pico-Testskript für MQTT-Empfang über den öffentlichen Broker.
-* **`messages/wlanZugriff.py`**: Pico-Hilfsskript zum Aufbau der WLAN-Verbindung.
+* **`messages/`**: Spezifikationen für die Kommunikation mit dem Pico.
+  * **`message-list.txt`**: Dokumentation der MQTT-Nachrichtentypen (`change_display_mode`, `change_PWM`, `set_points`).
+* **`pico/`**: Enthält die Firmware und Render-Skripte für den Raspberry Pi Pico W.
+  * **`main.py`**: MicroPython-Einstiegspunkt für den Pico. Verbindet WLAN und MQTT, verarbeitet die `set_points` Nachrichten.
+  * **`render_worldmap.py`**: PC-seitiges Skript zum Rendern einer equirektangulären Karte in einen Binär-Framebuffer (`framebuffer.bin`) für den Pico.
+  * **`display.py`, `motor.py`, `rpm.py`, `netz.py`**: Modulare Bestandteile der Firmware für Hardware-Steuerung und Netzwerk.
+  * **`state.py`**, **`config.py`**: Geteilter Status und Hardware-Konfigurationen für die Pico-Firmware.
+  * **`README.md`**: Detaillierte Spezifikation der POV-Globe Architektur und des Framebuffer-Konzepts.
 * **`start.sh`**: Ein Shell-Skript, das den einfachen und schnellen Start der Anwendung mit den korrekten Umgebungsvariablen ermöglicht.
+* **`presentation_outline.md`**: Leitfaden für eine Projektpräsentation (Frontend & Daten-Pipeline).
 * **`README.md`**: Diese Dokumentation.

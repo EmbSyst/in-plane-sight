@@ -30,7 +30,8 @@ export GLOBE_MQTT_RETAIN="${GLOBE_MQTT_RETAIN:-0}"
 export GLOBE_DUMMY_X="${GLOBE_DUMMY_X:-0}"
 export GLOBE_DUMMY_Y="${GLOBE_DUMMY_Y:-0}"
 
-# Put in position of the system to show the correct distance to the aircrafts
+# Hier die aktuelle Position des Systems eintragen zur korrekten Berechnung der Distanz. 
+# Aktuelle Koordinaten entsprechen Hochschule Heilbronn, Techcampus
 export SYSTEM_LAT="${SYSTEM_LAT:-49.12194}"
 export SYSTEM_LON="${SYSTEM_LON:-9.21111}"
 
