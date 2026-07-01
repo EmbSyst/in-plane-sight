@@ -113,13 +113,25 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.sent)
         self.assertEqual(result.mode, "mqtt")
         self.assertEqual(fake_client.connected_to, ("test.mosquitto.org", 1883, 60))
-        self.assertEqual(len(fake_client.published), 1)
-        self.assertEqual(fake_client.published[0][0], "in-plane-sight")
-        self.assertEqual(fake_client.published[0][2:], (0, False))
-        self.assertIn('"type":"set_points"', fake_client.published[0][1])
-        self.assertIn('"id":"TEST"', fake_client.published[0][1])
-        self.assertIn('"lat":1.0', fake_client.published[0][1])
-        self.assertIn('"color":[255,0,0]', fake_client.published[0][1])
+        import json
+
+        # Sollte zwei Nachrichten gesendet haben (change_display_mode und set_points)
+        self.assertEqual(len(fake_client.published), 2)
+
+        # Erste Nachricht: change_display_mode (mode=2)
+        mode_payload = json.loads(fake_client.published[0][1])
+        self.assertEqual(mode_payload["type"], "change_display_mode")
+        self.assertEqual(mode_payload["mode"], 2)
+        
+        # Zweite Nachricht: set_points
+        self.assertEqual(fake_client.published[1][0], "in-plane-sight")
+        self.assertEqual(fake_client.published[1][2:], (0, False))
+        points_payload = json.loads(fake_client.published[1][1])
+        self.assertEqual(points_payload["type"], "set_points")
+        self.assertEqual(len(points_payload["points"]), 1)
+        self.assertEqual(points_payload["points"][0]["id"], "TEST")
+        self.assertEqual(points_payload["points"][0]["lat"], 1.0)
+        self.assertEqual(points_payload["points"][0]["lon"], 2.0)
 
     async def test_mqtt_mode_reuses_persistent_client(self) -> None:
         from unittest.mock import patch
@@ -154,11 +166,16 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         with patch("backend.app.services.globe.mqtt.Client", return_value=fake_client):
             globe.shutdown_globe_transport()
             aircraft = SimpleNamespace(hex="abc123", flight="TEST", lat=1.0, lon=2.0, altitude=None, speed=None)
-            await globe.forward_to_globe(aircraft)
-            await globe.forward_to_globe(aircraft)
 
-        self.assertEqual(fake_client.connect_calls, 1)
-        self.assertEqual(fake_client.publish_calls, 2)
+            # Erste Flugzeug-Auswahl -> sendet 2 Nachrichten (Mode + Points)
+            await globe.forward_to_globe(aircraft)
+            self.assertEqual(fake_client.connect_calls, 1)
+            self.assertEqual(fake_client.publish_calls, 2)
+
+            # Zweite Flugzeug-Auswahl -> sendet wieder 2 Nachrichten (Mode + Points) -> gesamt 4
+            await globe.forward_to_globe(aircraft)
+            self.assertEqual(fake_client.connect_calls, 1)  # Kein neuer Verbindungsaufbau!
+            self.assertEqual(fake_client.publish_calls, 4)
 
     async def test_change_pwm_publishes_motor_messages(self) -> None:
         from unittest.mock import patch
