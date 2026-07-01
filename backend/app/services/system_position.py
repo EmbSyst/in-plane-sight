@@ -1,15 +1,8 @@
 from __future__ import annotations
 
-"""
-System position provider (lat/lon) for distance calculations.
+"""system_position.py - Liest die Systemkoordinaten aus.
 
-The frontend can compute the distance between the system (RasPi) and a selected
-aircraft if the backend exposes the system's own position.
-
-Sources (in priority order):
-1) Environment variables SYSTEM_LAT and SYSTEM_LON
-
-The function returns a small dict to keep dependencies minimal.
+Verwendet SYSTEM_LAT und SYSTEM_LON Umgebungsvariablen.
 """
 
 from typing import Any
@@ -28,8 +21,9 @@ def _read_env_position() -> dict[str, Any] | None:
         return None
     return {"lat": lat, "lon": lon, "source": "env"}
 
-def get_system_position() -> dict[str, Any] | None:
-    """
-    Return the system's current position as {"lat": float, "lon": float, "source": str}.
+def get_system_position() -> dict[str, str | float] | None:
+    """Holt die Position des Systems aus den Umgebungsvariablen.
+
+    Rückgabe: {"lat": float, "lon": float, "source": str} oder None.
     """
     return _read_env_position()

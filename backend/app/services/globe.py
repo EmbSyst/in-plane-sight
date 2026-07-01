@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-"""
-Globe forwarding integration.
+"""globe.py - MQTT-Publisher für den Holo-Globe.
 
-The transport is controlled by environment variables so it can evolve without touching
-the UI or dump1090 code. The current preferred mode is MQTT, but legacy HTTP/UDP modes
-are kept as fallback while the group transitions the Pico integration.
+Zuständig für die dauerhafte MQTT-Verbindung zum Broker und das Veröffentlichen von:
+- Display-Modes
+- Motor-PWM
+- Set Points (Flugzeugpositionen)
 """
 
 import asyncio
 import json
 import logging
-import socket
 import threading
 from typing import Any
 
-import httpx
 import paho.mqtt.client as mqtt
 
 from ..models import Aircraft, GlobeForwardResult
@@ -23,12 +21,13 @@ from ..utils import get_env, get_env_int
 
 logger = logging.getLogger("in-plane-sight.globe")
 
+# Speichert den MQTT-Client-Zustand, um bei jedem Aufruf darauf zugreifen zu können.
 _MQTT_CLIENT: mqtt.Client | None = None
 _MQTT_LOCK = threading.Lock()
 
 
 def _set_points_payload(aircraft: Aircraft) -> dict[str, Any]:
-    """Message that sends a point to the pico for the selected plane."""
+    """Erstellt eine 'set_points' Nachricht für das ausgewählte Flugzeug."""
     point_id = aircraft.flight.strip() if aircraft.flight and aircraft.flight.strip() else aircraft.hex
     return {
         "type": "set_points",
@@ -45,10 +44,10 @@ def _set_points_payload(aircraft: Aircraft) -> dict[str, Any]:
 
 def _aircraft_payload(aircraft: Aircraft) -> dict[str, Any]:
     """
-    Create a small JSON-serializable payload for the globe.
+    Erstellt einen kleinen, JSON-serialisierbaren Payload für den Globe.
 
-    The globe is expected to primarily use lat/lon, but including extra fields helps
-    debugging and allows richer visualizations later.
+    Der Globe benötigt primär lat/lon, aber das Hinzufügen weiterer Felder
+    hilft beim Debugging und ermöglicht später komplexere Visualisierungen.
     """
     return {
         "hex": aircraft.hex,
@@ -61,6 +60,10 @@ def _aircraft_payload(aircraft: Aircraft) -> dict[str, Any]:
 
 
 def _mqtt_client_settings() -> tuple[str, int, str, int, bool, str | None, str | None]:
+    """Liest die MQTT-Verbindungseinstellungen aus den Umgebungsvariablen aus.
+    
+    Rückgabe: (host, port, topic, qos, retain, username, password)
+    """
     return (
         get_env("GLOBE_MQTT_HOST", "test.mosquitto.org"),
         get_env_int("GLOBE_MQTT_PORT", 1883),
@@ -73,7 +76,7 @@ def _mqtt_client_settings() -> tuple[str, int, str, int, bool, str | None, str |
 
 
 def init_globe_transport() -> None:
-    """Initialize long-lived transport clients for the selected mode."""
+    """Wird beim App-Start aufgerufen, um die MQTT-Verbindung aufzubauen."""
     global _MQTT_CLIENT
     mode = get_env("GLOBE_MODE", "mqtt").lower()
     if mode != "mqtt":
@@ -88,9 +91,7 @@ def init_globe_transport() -> None:
         if username:
             client.username_pw_set(username, password)
 
-        # Connect in the background and never block or raise on startup: the broker
-        # may be unreachable (no WLAN/DNS yet, or a transient outage). paho's loop
-        # thread keeps retrying, so the web server always comes up regardless.
+        # Wir blockieren beim Verbindungsaufbau nicht (non-blocking connect im Hintergrund)
         try:
             client.connect_async(host, port, 60)
             client.loop_start()
@@ -101,7 +102,7 @@ def init_globe_transport() -> None:
 
 
 def shutdown_globe_transport() -> None:
-    """Tear down any long-lived transport client cleanly."""
+    """Wird beim App-Shutdown aufgerufen, um die Verbindung sauber zu trennen."""
     global _MQTT_CLIENT
     with _MQTT_LOCK:
         client = _MQTT_CLIENT
@@ -115,6 +116,7 @@ def shutdown_globe_transport() -> None:
 
 
 async def _publish_mqtt_messages(messages: list[dict[str, Any]]) -> GlobeForwardResult:
+    """Veröffentlicht eine Liste von Payloads nacheinander auf dem konfigurierten Topic."""
     def _publish() -> GlobeForwardResult:
         init_globe_transport()
         host, port, topic, qos, retain, _username, _password = _mqtt_client_settings()
@@ -139,7 +141,7 @@ async def _publish_mqtt_messages(messages: list[dict[str, Any]]) -> GlobeForward
 
 
 async def publish_display_mode(mode: int, color: list[int] | None = None) -> GlobeForwardResult:
-    """Publish a display mode change to the globe."""
+    """Sendet eine Änderung des Anzeigemodus an den Globe."""
     globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
     
     if globe_mode == "disabled":
@@ -157,12 +159,12 @@ async def publish_display_mode(mode: int, color: list[int] | None = None) -> Glo
     if globe_mode == "mqtt":
         return await _publish_mqtt_messages([message])
         
-    # We only implemented MQTT payload specs for these new modes in this project
-    return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"display mode change not supported for mode={globe_mode!r}")
+    # Wir haben MQTT-Payloads nur für diese neuen Modi in diesem Projekt spezifiziert
+        return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"Anzeigemodus für mode={globe_mode!r} nicht unterstützt")
 
 
 async def publish_set_points(points: list[dict[str, Any]]) -> GlobeForwardResult:
-    """Publish arbitrary points to the globe."""
+    """Sendet beliebige Punkte (set_points) an den Globe."""
     globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
     
     if globe_mode == "disabled":
@@ -180,11 +182,11 @@ async def publish_set_points(points: list[dict[str, Any]]) -> GlobeForwardResult
 
 
 def _rpm_to_pwm_values(mode: int, rpm: int | None) -> list[int]:
-    """Convert a requested motor mode/rpm into the int list the pico expects.
+    """Wandelt den gewünschten Motormodus/RPM in eine Liste von Integern um, die der Pico erwartet.
 
-    mode 0 = motor off -> empty list.
-    mode 1 = run -> the target rpm as an int list. Currently a 1:1 passthrough;
-    this is the single place to introduce a real rpm->PWM conversion later.
+    mode 0 = Motor aus -> leere Liste.
+    mode 1 = Laufen -> Ziel-RPM als Int-Liste. Aktuell 1:1 durchgereicht;
+    hier kann später eine echte RPM->PWM Umrechnung implementiert werden.
     """
     if mode == 0 or rpm is None:
         return []
@@ -192,7 +194,7 @@ def _rpm_to_pwm_values(mode: int, rpm: int | None) -> list[int]:
 
 
 async def publish_change_pwm(mode: int, rpm: int | None = None) -> GlobeForwardResult:
-    """Publish a motor PWM (rpm) change to the globe/pico."""
+    """Sendet eine Änderung der Motor-PWM (RPM) an den Globe/Pico."""
     globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
 
     if globe_mode == "disabled":
@@ -212,12 +214,10 @@ async def publish_change_pwm(mode: int, rpm: int | None = None) -> GlobeForwardR
 
 async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
     """
-    Forward an aircraft selection to the globe.
+    Leitet ein ausgewähltes Flugzeug an den Globe weiter.
 
-    Environment variables:
-    - GLOBE_MODE: disabled | mqtt | http | udp
-    - GLOBE_HTTP_URL, GLOBE_HTTP_TIMEOUT_S
-    - GLOBE_UDP_HOST, GLOBE_UDP_PORT
+    Umgebungsvariablen:
+    - GLOBE_MODE: disabled | mqtt
     - GLOBE_MQTT_HOST, GLOBE_MQTT_PORT, GLOBE_MQTT_TOPIC
     """
     mode = get_env("GLOBE_MODE", "mqtt").lower()
@@ -233,46 +233,5 @@ async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
             _set_points_payload(aircraft),
         ]
         return await _publish_mqtt_messages(messages)
-
-    if mode == "http":
-        url = get_env("GLOBE_HTTP_URL", "http://192.168.4.1/aircraft")
-        timeout_s = get_env_float("GLOBE_HTTP_TIMEOUT_S", 1.0)
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s)) as client:
-                response = await client.post(url, json=_aircraft_payload(aircraft))
-                response.raise_for_status()
-                content_type = response.headers.get("content-type", "")
-                parsed: Any
-                if "application/json" in content_type:
-                    parsed = response.json()
-                else:
-                    parsed = response.text
-            return GlobeForwardResult(mode=mode, sent=True, response=parsed)
-        except Exception as exc:
-            return GlobeForwardResult(mode=mode, sent=False, detail=str(exc))
-
-        messages = [
-            _display_mode_payload(),
-            _plane_position_payload(aircraft),
-        ]
-
-        def _publish() -> GlobeForwardResult:
-            client = _get_or_create_mqtt_client()
-            for message in messages:
-                payload = json.dumps(message, separators=(",", ":"))
-                info = client.publish(topic, payload, qos=qos, retain=retain)
-                if getattr(info, "rc", 0) != 0:
-                    return GlobeForwardResult(mode=mode, sent=False, detail=f"mqtt publish failed rc={info.rc}")
-            return GlobeForwardResult(
-                mode=mode,
-                sent=True,
-                detail=f"published {len(messages)} mqtt messages to {host}:{port}/{topic}",
-                response=messages,
-            )
-
-        try:
-            return await asyncio.to_thread(_publish)
-        except Exception as exc:
-            return GlobeForwardResult(mode=mode, sent=False, detail=str(exc))
 
     return GlobeForwardResult(mode=mode, sent=False, detail=f"unknown GLOBE_MODE={mode!r}")

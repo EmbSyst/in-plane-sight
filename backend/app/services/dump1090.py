@@ -1,14 +1,8 @@
 from __future__ import annotations
 
-"""
-Client for dump1090's locally written JSON snapshot file.
+"""dump1090.py - File-Reader für dump1090-fa JSON Snapshots.
 
-The Raspberry Pi backend polls `/tmp/aircraft.json` frequently and keeps a small
-in-memory cache.
-This module focuses on:
-- local file I/O with graceful error handling while dump1090 writes updates
-- Robust parsing (lat/lon may be missing; some fields may be non-numeric)
-- Mapping raw JSON dicts to typed Pydantic models
+Liest und parst die lokale Datei aircraft.json.
 """
 
 import json
@@ -19,7 +13,7 @@ from ..models import Aircraft
 
 
 def _clean_str(value: Any) -> str | None:
-    """Normalize string-like fields: convert to str, strip, return None if empty."""
+    """Normalisiert String-Felder: umwandeln in str, Leerzeichen entfernen, gibt None zurück wenn leer."""
     if value is None:
         return None
     text = str(value).strip()
@@ -27,7 +21,7 @@ def _clean_str(value: Any) -> str | None:
 
 
 def _to_float(value: Any) -> float | None:
-    """Convert values to float when possible, returning None for invalid/missing inputs."""
+    """Wandelt Werte in Floats um, gibt None zurück bei ungültigen/fehlenden Eingaben."""
     if value is None:
         return None
     try:
@@ -37,6 +31,7 @@ def _to_float(value: Any) -> float | None:
 
 
 def _first_float(item: dict[str, Any], keys: list[str]) -> float | None:
+    """Sucht in einem Dictionary nach dem ersten gültigen Float-Wert für eine Liste von Schlüsseln."""
     for key in keys:
         value = _to_float(item.get(key))
         if value is not None:
@@ -45,20 +40,20 @@ def _first_float(item: dict[str, Any], keys: list[str]) -> float | None:
 
 
 class Dump1090Client:
-    """Small reader for the local dump1090 aircraft snapshot file."""
+    """Kapselt das Auslesen und Parsen der lokalen aircraft.json."""
 
     def __init__(self, file_path: str) -> None:
         """
         Args:
-            file_path: path to dump1090 aircraft snapshot (usually /tmp/aircraft.json)
+            file_path: Pfad zum dump1090 Aircraft-Snapshot (normalerweise /tmp/aircraft.json)
         """
         self.file_path = file_path
 
     async def fetch_aircraft(self) -> tuple[list[Aircraft], float]:
         """
-        Fetch and parse the current aircraft list.
+        Liest und parst die aktuelle Flugzeugliste.
 
-        Returns:
+        Rückgabe:
             (aircraft, polled_at_unix_s)
         """
         polled_at = time.time()
@@ -89,10 +84,10 @@ class Dump1090Client:
 
     def _read_payload(self) -> dict[str, Any]:
         """
-        Read local dump1090 JSON payload from disk.
+        Liest den lokalen dump1090 JSON-Payload von der Festplatte.
 
-        If the file does not exist yet or is temporarily incomplete while being written,
-        return an empty aircraft list instead of raising an exception.
+        Fallback: leere Liste zurückgeben, falls die Datei noch nicht geschrieben wurde
+        oder gerade von dump1090 überschrieben wird (FileNotFoundError / JSONDecodeError).
         """
         try:
             with open(self.file_path, "r", encoding="utf-8") as f:

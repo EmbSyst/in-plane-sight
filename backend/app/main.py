@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-"""
-FastAPI entrypoint for the Raspberry Pi control application.
+"""main.py - FastAPI-Einstiegspunkt für die Raspberry Pi Control-App.
 
-Responsibilities:
-- Serve a touch-friendly local frontend from /static
-- Poll dump1090's aircraft.json regularly and keep a cached in-memory view
-- Expose the cached view via a small REST API for the frontend
-- Accept a "selected aircraft" from the UI and forward its position to the globe module
+Aufgaben:
+- Bereitstellung des touch-optimierten lokalen Frontends unter /static
+- Regelmäßiges Auslesen von dump1090 (aircraft.json) in einen In-Memory-Cache
+- Bereitstellung des Caches über eine kleine REST-API für das Frontend
+- Entgegennahme eines "ausgewählten Flugzeugs" aus der UI und Weiterleitung der Position an den Globe
 """
 
 import asyncio
@@ -31,12 +30,12 @@ STATIC_DIR = (Path(__file__).resolve().parent.parent / "static").resolve()
 
 
 def _aircraft_signature(aircraft) -> tuple[float | None, float | None, float | None, float | None]:
-    """Return the fields that matter for live globe republishing."""
+    """Liefert die Felder, die für ein erneutes Senden an den Globe (Live-Update) relevant sind."""
     return (aircraft.lat, aircraft.lon, aircraft.altitude, aircraft.speed)
 
 
 def _pick_selected_for_republish(state: Dump1090State, aircraft: list) -> tuple[object, tuple[float | None, float | None, float | None, float | None]] | None:
-    """Return the selected aircraft when its tracked position changed since the last publish."""
+    """Gibt das ausgewählte Flugzeug zurück, wenn sich seine Position seit dem letzten Senden geändert hat."""
     if not state.selected_hex:
         return None
     selected = next((a for a in aircraft if a.hex.lower() == state.selected_hex), None)
@@ -50,9 +49,9 @@ def _pick_selected_for_republish(state: Dump1090State, aircraft: list) -> tuple[
 
 def create_app() -> FastAPI:
     """
-    Create and configure the FastAPI application.
+    Erstellt und konfiguriert die FastAPI-Anwendung.
 
-    Configuration is driven by environment variables:
+    Die Konfiguration erfolgt über Umgebungsvariablen:
     - DUMP1090_FILE_PATH
     - DUMP1090_POLL_INTERVAL_S
     """
@@ -74,7 +73,7 @@ def create_app() -> FastAPI:
 
     @app.get("/")
     async def index() -> FileResponse:
-        """Serve the single-page frontend."""
+        """Liefert das Single-Page Frontend aus."""
         index_path = STATIC_DIR / "index.html"
         if not index_path.exists():
             raise HTTPException(status_code=404, detail="frontend not found")
@@ -82,9 +81,9 @@ def create_app() -> FastAPI:
 
     async def _poll_dump1090_loop() -> None:
         """
-        Background task that polls dump1090 and updates the shared cache.
+        Hintergrund-Task, der dump1090 ausliest und den gemeinsamen Cache aktualisiert.
 
-        On failures the previous aircraft list is kept and the error string is updated.
+        Bei Fehlern wird die vorherige Flugzeugliste beibehalten und der Fehlertext aktualisiert.
         """
         client = Dump1090Client(file_path=dump1090_file_path)
         state: Dump1090State = app.state.dump1090
@@ -128,9 +127,9 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def _on_startup() -> None:
-        """Start the dump1090 polling loop and long-lived integrations."""
-        # Globe forwarding is optional: a failure here must never abort app startup
-        # (otherwise the whole website goes down when the MQTT broker is unreachable).
+        """Startet die dump1090-Schleife und die dauerhaften Verbindungen (MQTT)."""
+
+
         try:
             init_globe_transport()
         except Exception:
@@ -140,7 +139,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("shutdown")
     async def _on_shutdown() -> None:
-        """Stop the polling task and long-lived integrations cleanly."""
+        """Beendet den Polling-Task und schließt Verbindungen sauber ab."""
         task: asyncio.Task | None = app.state.poll_task
         if task is not None:
             task.cancel()
@@ -152,16 +151,17 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> dict[str, str]:
-        """Simple liveness probe for the backend."""
+        """Einfacher Liveness-Probe-Endpunkt."""
         return {"status": "ok"}
 
     @app.get("/api/aircraft", response_model=AircraftListResponse)
     async def list_aircraft() -> AircraftListResponse:
         """
-        Return the latest cached aircraft list.
+        Gibt die aktuell gecachte Flugzeugliste zurück.
 
-        The frontend calls this endpoint periodically; the backend does not hit dump1090
-        on-demand to keep the UI responsive even when dump1090 is slow or offline.
+        Das Frontend ruft diesen Endpunkt regelmäßig auf; das Backend blockiert nicht,
+        um dump1090 synchron zu lesen. So bleibt die UI reaktionsschnell, auch wenn
+        dump1090 langsam oder offline ist.
         """
         state: Dump1090State = app.state.dump1090
         system_position = get_system_position()
@@ -178,10 +178,10 @@ def create_app() -> FastAPI:
     @app.post("/api/select", response_model=SelectResponse)
     async def select_aircraft(request: SelectRequest) -> SelectResponse:
         """
-        Select an aircraft by ICAO hex and forward it to the globe integration.
+        Wählt ein Flugzeug über seine ICAO-Hex-Adresse aus und leitet es an den Globe weiter.
 
-        If the aircraft is missing from the latest cache, a 404 is returned.
-        If the aircraft has no lat/lon yet, forwarding is rejected by the globe module.
+        Wenn das Flugzeug im aktuellen Cache fehlt, wird ein 404 zurückgegeben.
+        Wenn das Flugzeug noch keine Lat/Lon-Daten hat, wird die Weiterleitung abgelehnt.
         """
         state: Dump1090State = app.state.dump1090
         async with state.lock:
@@ -205,7 +205,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/unselect")
     async def unselect_aircraft() -> dict[str, bool]:
-        """Clear the currently tracked aircraft so live republishing stops."""
+        """Entfernt die Auswahl des aktuell verfolgten Flugzeugs (stoppt Live-Updates)."""
         state: Dump1090State = app.state.dump1090
         async with state.lock:
             state.selected_hex = None
@@ -214,7 +214,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/globe/mode")
     async def set_globe_mode(request: DisplayModeRequest) -> dict[str, bool]:
-        """Change the display mode of the globe."""
+        """Ändert den Anzeigemodus des Globes."""
         result = await publish_display_mode(request.mode, request.color)
         if not result.sent:
             raise HTTPException(status_code=500, detail=result.detail or "failed to set mode")
@@ -222,8 +222,8 @@ def create_app() -> FastAPI:
 
     @app.post("/api/globe/points")
     async def set_globe_points(request: SetPointsRequest) -> dict[str, bool]:
-        """Send a list of points to be displayed on the globe."""
-        # Convert Pydantic models to dicts before passing to the publisher
+        """Sendet eine Liste von Punkten (set_points), die auf dem Globe angezeigt werden sollen."""
+        # Pydantic-Modelle in Dicts umwandeln, bevor sie an den Publisher gehen
         points_dicts = [p.model_dump() for p in request.points]
         result = await publish_set_points(points_dicts)
         if not result.sent:
@@ -232,7 +232,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/globe/motor")
     async def set_globe_motor(request: ChangePwmRequest) -> dict[str, bool]:
-        """Change the motor PWM (rpm) of the globe."""
+        """Ändert die Motor-PWM (RPM) des Globes."""
         result = await publish_change_pwm(request.mode, request.rpm)
         if not result.sent:
             raise HTTPException(status_code=500, detail=result.detail or "failed to set motor")
@@ -240,7 +240,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/aircraft/{hex_code}/metadata", response_model=AircraftMetadata)
     async def aircraft_metadata(hex_code: str) -> AircraftMetadata:
-        """Return cached/enriched image metadata for one aircraft hex code."""
+        """Gibt gecachte oder neu abgerufene Metadaten (Bild, Typ, Airline) für einen Hex-Code zurück."""
         return await get_aircraft_metadata(hex_code)
 
     return app
