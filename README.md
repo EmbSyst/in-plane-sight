@@ -91,6 +91,7 @@ Die in `messages/message-list.txt` dokumentierten Nachrichtentypen sind:
 
 * `mode = 0`: LEDs aus
 * `mode = 1`: gesamten Globe mit `color` füllen
+* `mode = 2`: Weltkarte (Framebuffer) anzeigen
 * `mode = 3`: RGB-Regenbogenmodus
 
 **2. Motorsteuerung per PWM**

@@ -164,19 +164,24 @@ async def publish_display_mode(mode: int, color: list[int] | None = None) -> Glo
 
 
 async def publish_set_points(points: list[dict[str, Any]]) -> GlobeForwardResult:
-    """Sendet beliebige Punkte (set_points) an den Globe."""
+    """Sendet beliebige Punkte (set_points) an den Globe und erzwingt den Weltkarten-Modus."""
     globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
     
     if globe_mode == "disabled":
         return GlobeForwardResult(mode=globe_mode, sent=False, detail="globe forwarding disabled")
         
-    message = {
+    mode_msg = {
+        "type": "change_display_mode",
+        "mode": 2,
+        "color": [255, 255, 255],
+    }
+    points_msg = {
         "type": "set_points",
         "points": points,
     }
     
     if globe_mode == "mqtt":
-        return await _publish_mqtt_messages([message])
+        return await _publish_mqtt_messages([mode_msg, points_msg])
         
     return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"set points not supported for mode={globe_mode!r}")
 
@@ -230,6 +235,7 @@ async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
 
     if mode == "mqtt":
         messages = [
+            {"type": "change_display_mode", "mode": 2, "color": [255, 255, 255]},
             _set_points_payload(aircraft),
         ]
         return await _publish_mqtt_messages(messages)
