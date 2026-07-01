@@ -486,6 +486,10 @@ async function setGlobeMode(mode, color = null) {
  */
 async function setRandomPlane() {
   try {
+    // Hebt die Auswahl eines echten Flugzeugs auf, damit der Hintergrund-Poller 
+    // den zufälligen Punkt nicht sofort wieder überschreibt, wenn sich das echte Flugzeug bewegt.
+    await clearSelection();
+
     const lat = (Math.random() * 180) - 90;
     const lon = (Math.random() * 360) - 180;
     
@@ -495,7 +499,7 @@ async function setRandomPlane() {
           id: "RND" + Math.floor(Math.random() * 1000),
           lat: lat,
           lon: lon,
-          color: [255, 255, 255]
+          color: [255, 0, 0] // Roter Punkt
         }
       ]
     };

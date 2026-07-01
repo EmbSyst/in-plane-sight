@@ -8,11 +8,11 @@ Dieses Dokument beschreibt die physische Einrichtung für das "In Plane Sight"-P
 
 ### Raspberry Pi (Main Controller)
 * Der Raspberry Pi 5 ist im Touchgehäuse verbaut und braucht eine Stromversorgung über das weiße Netzkabel von Raspberry. Dieses muss am USB-C-Port des Raspberry Pi 5 angeschlossen werden.
-* Der HackRF-One muss über eine USB-Kabel an einen der freien USB-Ports am Raspberry Pi 5 angeschlossen werden.
+* Der HackRF-One muss über ein Micro-USB auf USB-Kabel an einen der freien USB-Ports am Raspberry Pi 5 angeschlossen werden.
 * Die Antenne muss zusätzlich am Antennen-Port des HackRF-One angeschlossen werden.
 
 ### Holo-Globe (Pico Controller)
-* Das Kaltgeräte-Kabel muss am Sockel des Holo-Globes angeschlossen werden. Danach kann der Schalter am Sockel des Holo-Globes betätigt werden.
+* Das Kaltgeräte-Kabel muss am Sockel des Holo-Globes angeschlossen werden. Danach kann der Netz-Schalter am Sockel des Holo-Globes betätigt werden.
 * Der Raspberry Pi Pico 2W braucht zudem eine zusätzliche 5V Stromversorgung über dessen Micro-USB-Port. Diese kann über ein 5V USB-Netzteil oder über einen Laptop erfolgen.
 
 ---
@@ -33,7 +33,9 @@ git pull
 
 ## 3. WLAN Konfiguration
 
-Es ist wichtig, dass beide Raspberry Pi 5 und Raspberry Pi Pico 2W im gleichen WLAN verbunden sind. Ansonsten kann der Datenaustausch über MQTT nicht erfolgen.
+Es ist wichtig dass der Raspberry Pi 5 und der Pico 2W eine Verbindung zu einem WLAN-Netzwerk haben. 
+
+Dieses muss nicht unbedingt das selbe Netzwerk sein, da wir einen öffentlichen MQTT-Broker nutzen. 
 
 ### 3.1 WLAN Konfiguration des Raspberry Pi 5
 
@@ -104,11 +106,11 @@ Diese können bei Bedarf geändert werden.
 
 Vor dem ersten Start des Holo-Globes sollten natürlich alle Steckverbindungen auf der Platine im Holo-Globe überprüft werden. Hierzu bitte den Stromlaufplan bzw. die Dokumentation des Holo-Globes ansehen.
 
-Danach kann die Drehbewegung des Holo-Globes entweder durch kurzes Halten der grünen Taste an dem Sockel des Holo-Globes, oder durch Auswählen der "400" Umdrehungen im Frontend des Raspiberry Pi 5 auf dem Touchdisplay durchgeführt werden.
+Danach kann die Drehbewegung des Holo-Globes entweder durch kurzes Halten des grünen Tasters an dem Sockel des Holo-Globes, oder durch Auswählen der "400" Umdrehungen im Frontend des Raspiberry Pi 5 auf dem Touchdisplay durchgeführt werden.
 
 Gegebenenfalls muss die Drehbewegung durch einen kleine Schubs initiiert werden. 
 
-über das Halten der grünen oder roten Taste am Sockel des Holo-Globes kann die Drehbewegung stufenlos verstellt werden bzw. der Globe auch wieder gestoppt werden.
+über das Halten des grünen oder roten Tasters am Sockel des Holo-Globes kann die Drehbewegung stufenlos verstellt werden bzw. der Globe auch wieder gestoppt werden.
 
 ### 4.2 Lichtmodi des Holo-Globes
 
@@ -122,5 +124,5 @@ Standardmäßig ist die Weltkarte aktiv und kann durch das Frontend in verschied
 Wenn du Wartungsarbeiten am System durchführen musst:
 1. Eine physische Tastatur an den Raspberry Pi anschließen.
 2. `Alt + F4` drücken, um Sway zu beenden und in die ungedrehte Textkonsole zu gelangen.
-3. Hier können Befehle ausgeführt oder Logs geprüft werden.
+3. Hier können Befehle ausgeführt oder Logs geprüft werden (z.B. `ifconfig` um IP-Adresse zu überprüfen für eine ssh-Verbindung).
 4. Mit `sudo reboot` startet das System wieder regulär in den Kiosk-Modus.

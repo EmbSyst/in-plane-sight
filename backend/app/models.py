@@ -76,14 +76,14 @@ class SelectResponse(BaseModel):
 class DisplayModeRequest(BaseModel):
     """Anfrage-Payload zum Ändern des Globe-Anzeigemodus."""
 
-    mode: int = Field(..., description="Anzeigemodus (0=aus, 1=Volltonfarbe, 3=Regenbogen)")
+    mode: int = Field(..., description="Anzeigemodus (0=aus, 1=Volltonfarbe, 2=Weltkarte, 3=Regenbogen)")
     color: list[int] | None = Field(default=None, description="RGB-Farb-Array (z.B. [255, 255, 255])")
 
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, v: int) -> int:
-        if v not in (0, 1, 3):
-            raise ValueError("mode must be one of [0, 1, 3]")
+        if v not in (0, 1, 2, 3):
+            raise ValueError("mode must be one of [0, 1, 2, 3]")
         return v
 
     @field_validator("color")

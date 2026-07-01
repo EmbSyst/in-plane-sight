@@ -5,6 +5,7 @@
 Werte für 
 - mode: 0 # LEDs aus
 - mode: 1 # fülle den gesamten Globus mit der übergebenen Farbe $color
+- mode: 2 # zeige die Weltkarte (Framebuffer) an
 - mode: 3 # RGB Regenbogen-Farbspiel
 - color: Liste aus 3 Int-Werten für RGB   
 {
