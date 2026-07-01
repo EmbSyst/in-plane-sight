@@ -1,19 +1,20 @@
-/*
-  Touchscreen UI logic (vanilla JS).
+/* app.js - Frontend Logik.
 
-  The frontend is intentionally lightweight for Raspberry Pi kiosk mode:
-  - Polls the backend cache (/api/aircraft) every second
-  - Renders aircraft cards with big tap targets
-  - Sends a selection to /api/select to forward lat/lon to the globe integration
+Beinhaltet das Polling der Daten, Tab-Wechsel, UI-Updates und Distanzberechnungen.
 */
 
 const POLL_INTERVAL_MS = 1000;
 const PLACEHOLDER_IMG = "/static/aircraft-placeholder.svg";
 
+// --- In-Memory-Zustand ---
 let selectedHex = null;
 let selectedMeta = null;
 let systemPosition = null;
 
+// --- DOM-Elemente ---
+/**
+ * Holt ein DOM-Element anhand seiner ID und wirft einen Fehler, falls es nicht existiert.
+ */
 function $(id) {
   const el = document.getElementById(id);
   if (!el) {
@@ -22,10 +23,17 @@ function $(id) {
   return el;
 }
 
+/**
+ * Prüft, ob der Browser auf reduzierte Animationen (z.B. für Barrierefreiheit) eingestellt ist.
+ */
 function prefersReducedMotion() {
   return Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 }
 
+/**
+ * Scrollt die Ansicht nach der Auswahl eines Flugzeugs nach ganz oben,
+ * um die Details sofort sichtbar zu machen.
+ */
 function scrollToTopAfterSelection() {
   const behavior = prefersReducedMotion() ? "auto" : "smooth";
   window.requestAnimationFrame(() => {
@@ -33,11 +41,17 @@ function scrollToTopAfterSelection() {
   });
 }
 
+/**
+ * Formatiert eine Zahl sicher als String, optional mit angehängter Einheit.
+ */
 function formatNumber(value, unit) {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   return unit ? `${value} ${unit}` : String(value);
 }
 
+/**
+ * Formatiert GPS-Koordinaten auf 4 Nachkommastellen genau.
+ */
 function formatCoord(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return "—";
   if (typeof value === "number") return value.toFixed(4);
@@ -46,6 +60,9 @@ function formatCoord(value) {
   return "—";
 }
 
+/**
+ * Berechnet die Distanz zwischen zwei GPS-Punkten in Kilometern mittels Haversine-Formel.
+ */
 function haversineKm(lat1, lon1, lat2, lon2) {
   const toRad = (d) => (d * Math.PI) / 180;
   const R = 6371;
@@ -58,26 +75,41 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+/**
+ * Normalisiert eine Flugnummer/Callsign (entfernt Leerzeichen).
+ */
 function normalizeFlight(value) {
   const text = (value || "").trim();
   return text.length > 0 ? text : null;
 }
 
+/**
+ * Gibt die formatierte Flugnummer zurück oder einen Platzhalterstrich, falls keine vorhanden ist.
+ */
 function displayFlight(value) {
   const flight = normalizeFlight(value);
   return flight ? flight : "—";
 }
 
+/**
+ * Liefert den Sortierschlüssel für die Flugzeugliste (bevorzugt Flugnummer, ansonsten Hex).
+ */
 function sortKeyForAircraft(a) {
   const flight = normalizeFlight(a && a.flight);
   if (flight) return flight;
   return String((a && a.hex) || "");
 }
 
+/**
+ * Normalisiert eine Hex-Adresse in einen sauberen, kleingeschriebenen String.
+ */
 function normalizeHex(hex) {
   return String(hex || "").trim().toLowerCase();
 }
 
+/**
+ * Sendet einen API-Call, um das aktuell verfolgte Flugzeug abzuwählen.
+ */
 async function unselectAircraft() {
   const response = await fetch("/api/unselect", {
     method: "POST",
@@ -88,6 +120,9 @@ async function unselectAircraft() {
   }
 }
 
+/**
+ * Hebt die Auswahl im Frontend auf, leert die Detailansicht und aktualisiert das Backend.
+ */
 async function clearSelection() {
   try {
     await unselectAircraft();
@@ -98,6 +133,9 @@ async function clearSelection() {
   }
 }
 
+/**
+ * Zeigt eine temporäre Toast-Benachrichtigung an (z.B. für Erfolg oder Fehler).
+ */
 function showToast(message, kind) {
   const toast = $("toast");
   toast.textContent = message;
@@ -108,6 +146,9 @@ function showToast(message, kind) {
   showToast._t = window.setTimeout(() => toast.classList.remove("show"), 2400);
 }
 
+/**
+ * Pollt die aktuellsten Flugzeugdaten vom Backend.
+ */
 async function fetchAircraft() {
   const response = await fetch("/api/aircraft", { cache: "no-store" });
   if (!response.ok) {
@@ -116,6 +157,9 @@ async function fetchAircraft() {
   return await response.json();
 }
 
+/**
+ * Wählt ein Flugzeug aus und fordert das Backend auf, die Metadaten/Globe-Integration zu starten.
+ */
 async function selectAircraft(hex) {
   const response = await fetch("/api/select", {
     method: "POST",
@@ -131,6 +175,9 @@ async function selectAircraft(hex) {
   return data;
 }
 
+/**
+ * Rendert die Detailansicht eines ausgewählten Flugzeugs (Bild, Koordinaten, Distanz).
+ */
 function renderDetails(selected, meta) {
   const details = $("details");
   if (!selected) {
@@ -223,6 +270,9 @@ function renderDetails(selected, meta) {
   details.replaceChildren(card);
 }
 
+/**
+ * Rendert die Liste/Grid aller aktuell getrackten Flugzeuge.
+ */
 function render(state) {
   const statusEl = $("status");
   const grid = $("grid");
@@ -325,6 +375,9 @@ function render(state) {
 }
 
 let isSelecting = false;
+/**
+ * Handler für das Anklicken/Auswählen eines Flugzeugs.
+ */
 async function onSelect(hex) {
   if (isSelecting) return;
   isSelecting = true;
@@ -348,6 +401,10 @@ async function onSelect(hex) {
   }
 }
 
+/**
+ * Aktualisiert die Detailansicht live, falls sich Position, Höhe oder Geschwindigkeit
+ * des aktuell ausgewählten Flugzeugs geändert haben.
+ */
 function refreshSelectedFromState(state) {
   if (!selectedHex || !state || !Array.isArray(state.aircraft)) return;
   const match = state.aircraft.find((a) => normalizeHex(a && a.hex) === selectedHex) || null;
@@ -355,6 +412,9 @@ function refreshSelectedFromState(state) {
   renderDetails(match, selectedMeta);
 }
 
+/**
+ * Die Haupt-Polling-Schleife. Wird jede Sekunde aufgerufen.
+ */
 async function loop() {
   try {
     const state = await fetchAircraft();
@@ -368,7 +428,10 @@ async function loop() {
   }
 }
 
-// Tab navigation logic
+// --- Tab Navigation ---
+/**
+ * Initialisiert die Klick-Event-Listener für das Umschalten der UI-Tabs.
+ */
 function setupTabs() {
   const tabAircrafts = $("tabAircrafts");
   const tabGlobeControl = $("tabGlobeControl");
@@ -390,7 +453,10 @@ function setupTabs() {
   });
 }
 
-// Globe Control logic
+// --- Globe Control Logik ---
+/**
+ * Sendet einen Befehl an das Backend, um den Anzeigemodus des Holo-Globes zu ändern.
+ */
 async function setGlobeMode(mode, color = null) {
   try {
     const payload = { mode };
@@ -415,6 +481,9 @@ async function setGlobeMode(mode, color = null) {
   }
 }
 
+/**
+ * Generiert zufällige Koordinaten und sendet sie als neuen "set_points" Befehl an den Globe.
+ */
 async function setRandomPlane() {
   try {
     const lat = (Math.random() * 180) - 90;
@@ -448,7 +517,10 @@ async function setRandomPlane() {
   }
 }
 
-// Motor Control logic
+// --- Motor Control Logik ---
+/**
+ * Sendet einen Befehl an das Backend, um die Motorgeschwindigkeit (RPM) zu ändern.
+ */
 async function setMotorRpm(rpm) {
   try {
     const mode = rpm > 0 ? 1 : 0;

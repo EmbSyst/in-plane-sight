@@ -1,10 +1,6 @@
-/*
-  Dark, touch-friendly styling for Raspberry Pi kiosk usage.
+/* styles.css - Touch-UI Styling.
 
-  Goals:
-  - high contrast / readable at a distance
-  - large tap targets (cards + buttons)
-  - responsive layout for 7–8 inch touchscreen
+Optimiert für Kiosk-Mode, kleine Displays und dunkle Umgebungen.
 */
 
 :root {

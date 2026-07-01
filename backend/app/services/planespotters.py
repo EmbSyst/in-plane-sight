@@ -1,16 +1,9 @@
 from __future__ import annotations
 
-"""
-Planespotters metadata integration.
+"""planespotters.py - Integration der Planespotters API.
 
-The Planespotters API can enrich dump1090 aircraft with:
-- a representative photo (thumbnail_large.src)
-- aircraft type/model
-- airline
-- photographer credit
-
-To avoid rate limiting, results are cached in-memory by ICAO hex. Negative results
-(no photos / offline) are cached as placeholder metadata as well.
+Ruft Bilder und Flugzeugtypen basierend auf dem Hex-Code ab. Beinhaltet ein
+In-Memory-Caching, um das strenge Rate-Limiting der API zu umgehen.
 """
 
 import logging
@@ -50,11 +43,11 @@ _TYPE_MANUFACTURER_TOKENS = {
 
 def _request_headers() -> dict[str, str]:
     """
-    Build headers for Planespotters requests.
+    Erstellt Header für Anfragen an Planespotters.
 
-    Some API/CDN edges reject anonymous client defaults and expect browser-like
-    headers such as Referer/Origin. These defaults can still be overridden via
-    environment variables if Planespotters changes its requirements.
+    Einige API/CDN-Endpunkte blockieren Standard-Clients und erwarten Header,
+    die einem Browser ähneln (z.B. Referer/Origin). Diese können bei Bedarf
+    über Umgebungsvariablen angepasst werden.
     """
     contact = get_env("PLANESPOTTERS_CONTACT", "https://github.com/EmbSyst/in-plane-sight")
     user_agent_default = f"InPlaneSight/0.1 (+{contact})"
@@ -68,10 +61,10 @@ def _request_headers() -> dict[str, str]:
 
 def _copy_model(model: Any, update: dict[str, Any]) -> Any:
     """
-    Return a shallow copy of a Pydantic model with updated fields.
+    Gibt eine flache Kopie eines Pydantic-Modells mit aktualisierten Feldern zurück.
 
-    Supports both Pydantic v2 (`model_copy`) and v1 (`copy`) to avoid runtime errors
-    on environments that still ship Pydantic v1.
+    Unterstützt sowohl Pydantic v2 (`model_copy`) als auch v1 (`copy`), um
+    Abwärtskompatibilität zu gewährleisten.
     """
     model_copy = getattr(model, "model_copy", None)
     if callable(model_copy):
@@ -121,12 +114,12 @@ def _format_slug_token(token: str) -> str:
 
 def _parse_type_and_airline_from_link(link: str) -> tuple[str | None, str | None]:
     """
-    Best-effort fallback for Planespotters responses that only contain a photo link.
+    Fallback, falls die API-Antwort nur einen Link zum Foto enthält.
 
-    In practice, the /pub/photos/hex/{hex} endpoint often returns:
-    - photographer
-    - thumbnail URLs
-    - a canonical photo link that embeds registration, airline slug and type slug
+    In der Praxis liefert der Endpunkt oft:
+    - Fotograf
+    - Thumbnail URLs
+    - Einen Fotolink, der Registrierung, Airline und Flugzeugtyp in der URL enthält.
     """
     try:
         path = link.split("?", 1)[0]
@@ -207,7 +200,7 @@ def _parse_payload(hex_code: str, payload: Any) -> AircraftMetadata:
 
 async def get_aircraft_metadata(hex_code: str) -> AircraftMetadata:
     """
-    Fetch aircraft metadata by ICAO hex via Planespotters (with caching).
+    Holt Metadaten für ein Flugzeug aus dem Cache oder ruft sie neu ab.
 
     Environment variables:
     - PLANESPOTTERS_BASE_URL (default: https://api.planespotters.net/pub/photos/hex)
