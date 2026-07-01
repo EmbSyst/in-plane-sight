@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-"""
-Shared in-memory state for the dump1090 polling loop.
+"""state.py - gemeinsamer Zustand ('Whiteboard'). Nur Daten, keine Logik.
 
-The backend polls dump1090 in a background task and keeps the latest aircraft list in
-memory. Endpoints read from this state under an asyncio.Lock to avoid partial updates.
+Beinhaltet In-Memory-Klassen, die den Zustand über Request-Grenzen hinweg teilen.
 """
 
 import asyncio
@@ -15,11 +13,18 @@ from .models import Aircraft
 
 @dataclass
 class Dump1090State:
-    """Holds the latest dump1090 poll results and error status."""
+    """Speichert die neuesten dump1090-Abfrageergebnisse und den Fehlerstatus."""
 
     source_file_path: str
     poll_interval_s: float
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    
+    # Flugzeugdaten
     aircraft: list[Aircraft] = field(default_factory=list)
     polled_at_unix_s: float | None = None
     error: str | None = None
+    
+    # Selektionsstatus für Live-MQTT-Publishing
+    selected_hex: str | None = None
+    # speichert (lat, lon, altitude, speed), um Änderungen zu erkennen
+    last_forwarded_signature: tuple[float | None, float | None, float | None, float | None] | None = None

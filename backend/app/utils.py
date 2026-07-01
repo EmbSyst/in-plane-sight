@@ -1,21 +1,18 @@
 from __future__ import annotations
 
-"""
-Small shared utilities for the backend.
+"""utils.py - Hilfsfunktionen.
 
-At the moment this module centralizes environment-variable handling so different parts
-of the application (poller, globe integration, etc.) behave consistently.
+Allgemeine Helfer, z.B. für das Auslesen von Umgebungsvariablen.
 """
 
 import os
 
 
 def get_env(name: str, default: str) -> str:
-    """
-    Return an environment variable value, falling back to default if unset/blank.
+    """Gibt den Wert einer Umgebungsvariablen zurück oder den Standardwert, falls leer/nicht gesetzt.
 
-    The returned value is stripped to avoid subtle configuration issues caused by
-    leading/trailing whitespace in shell exports.
+    Der zurückgegebene Wert wird bereinigt (stripped), um subtile Konfigurationsfehler
+    durch führende oder nachfolgende Leerzeichen in Shell-Exports zu vermeiden.
     """
     value = os.getenv(name)
     if value is None:
@@ -25,7 +22,11 @@ def get_env(name: str, default: str) -> str:
 
 
 def get_env_float(name: str, default: float) -> float:
-    """Parse an environment variable as float, returning default when invalid/unset."""
+    """Liest eine Float-Umgebungsvariable aus.
+
+    Gibt `default` zurück, wenn die Variable nicht existiert, leer ist
+    oder nicht in einen Float umgewandelt werden kann.
+    """
     raw = get_env(name, str(default))
     try:
         return float(raw)
@@ -34,7 +35,7 @@ def get_env_float(name: str, default: float) -> float:
 
 
 def get_env_int(name: str, default: int) -> int:
-    """Parse an environment variable as int, returning default when invalid/unset."""
+    """Liest eine Integer-Umgebungsvariable aus, gibt bei Fehler/Fehlen den Standardwert zurück."""
     raw = get_env(name, str(default))
     try:
         return int(raw)

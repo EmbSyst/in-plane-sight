@@ -1,0 +1,36 @@
+# Folgende Messages sollten wir nutzen:
+
+
+## Den Anzeigemodus auf dem Globe wechseln
+Werte für 
+- mode: 0 # LEDs aus
+- mode: 1 # fülle den gesamten Globus mit der übergebenen Farbe $color
+- mode: 3 # RGB Regenbogen-Farbspiel
+- color: Liste aus 3 Int-Werten für RGB   
+{
+  "type": "change_display_mode",
+  "mode": 0,
+  "color": [255, 255, 255]
+}
+
+## Motorsteuerung (über PWM)
+Werte für
+- mode: 0 # Motor aus
+- mode: 1 # rechne Wert für $rpm in benötigte int-Werte um und übergebe sie als int Liste
+{
+  "type": "change_PWM",
+  "mode": 0,
+  "rpm": []
+}
+
+## Flugzeugpositionen setzen (set_points)
+Werte für points:
+- id: String (z.B. Flight Callsign oder Hex-Code)
+- lat, lon: Float-Werte für Latitude und Longitude
+- color: Liste aus 3 Int-Werten für RGB
+{
+  "type": "set_points",
+  "points": [
+    { "id": "DLH123", "lat": 48.35, "lon": 11.78, "color": [255, 0, 0] }
+  ]
+}

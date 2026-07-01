@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-"""
-Pydantic models for the backend API.
-
-These models define:
-- the normalized aircraft data shape used by the UI
-- request/response payloads for selecting and forwarding aircraft
-"""
+"""models.py - Pydantic-Datenmodelle für Typensicherheit und Validierung."""
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Aircraft(BaseModel):
-    """Normalized aircraft record extracted from dump1090."""
+    """Repräsentiert ein einzelnes Flugzeug, das von dump1090 geparst wurde."""
 
     hex: str = Field(..., description="ICAO address (hex)")
     flight: str | None = Field(default=None, description="Callsign / flight number")
@@ -25,15 +19,15 @@ class Aircraft(BaseModel):
 
 
 class SystemPosition(BaseModel):
-    """System's own position, used to compute distance to aircraft."""
+    """Eigene Position des Systems, verwendet zur Berechnung der Distanz zu Flugzeugen."""
 
-    lat: float = Field(..., description="System latitude")
-    lon: float = Field(..., description="System longitude")
-    source: str = Field(..., description="Position source (e.g. env)")
+    lat: float = Field(..., description="System-Breitengrad")
+    lon: float = Field(..., description="System-Längengrad")
+    source: str = Field(..., description="Positionsquelle (z.B. env)")
 
 
 class AircraftListResponse(BaseModel):
-    """Response payload for the UI poll endpoint."""
+    """Antwort-Payload für den UI-Poll-Endpunkt."""
 
     ok: bool
     source_file_path: str
@@ -44,25 +38,25 @@ class AircraftListResponse(BaseModel):
 
 
 class SelectRequest(BaseModel):
-    """Request payload from the UI when a user selects an aircraft."""
+    """Anfrage-Payload von der UI, wenn ein Benutzer ein Flugzeug auswählt."""
 
-    hex: str = Field(..., description="ICAO address (hex) of the aircraft to select")
+    hex: str = Field(..., description="ICAO-Adresse (hex) des auszuwälenden Flugzeugs")
 
 
 class AircraftMetadata(BaseModel):
-    """Metadata for an aircraft, enriched via external APIs (e.g. Planespotters)."""
+    """Metadaten für ein Flugzeug, angereichert durch externe APIs."""
 
-    hex: str = Field(..., description="ICAO address (hex) this metadata refers to")
-    type: str | None = Field(default=None, description="Aircraft model/type")
-    airline: str | None = Field(default=None, description="Operating airline")
-    photographer: str | None = Field(default=None, description="Photographer credit")
-    image_url: str | None = Field(default=None, description="URL of aircraft image")
-    from_cache: bool = Field(default=False, description="True if returned from in-memory cache")
-    placeholder: bool = Field(default=False, description="True if using a generic placeholder image")
+    hex: str = Field(..., description="ICAO-Adresse (hex), auf die sich diese Metadaten beziehen")
+    type: str | None = Field(default=None, description="Flugzeugmodell/-typ")
+    airline: str | None = Field(default=None, description="Betreibende Fluggesellschaft")
+    photographer: str | None = Field(default=None, description="Fotografen-Credit")
+    image_url: str | None = Field(default=None, description="URL des Flugzeugbildes")
+    from_cache: bool = Field(default=False, description="Wahr, wenn aus dem In-Memory-Cache zurückgegeben")
+    placeholder: bool = Field(default=False, description="Wahr, wenn ein generisches Platzhalterbild verwendet wird")
 
 
 class GlobeForwardResult(BaseModel):
-    """Result of forwarding the selected aircraft to the globe integration."""
+    """Ergebnis der Weiterleitung des ausgewählten Flugzeugs an die Globe-Integration."""
 
     mode: str
     sent: bool
@@ -71,9 +65,67 @@ class GlobeForwardResult(BaseModel):
 
 
 class SelectResponse(BaseModel):
-    """Response payload for the selection endpoint."""
+    """Antwort-Payload für den Auswahl-Endpunkt."""
 
     ok: bool
     selected: Aircraft | None
     forward: GlobeForwardResult
     meta: AircraftMetadata | None = None
+
+
+class DisplayModeRequest(BaseModel):
+    """Anfrage-Payload zum Ändern des Globe-Anzeigemodus."""
+
+    mode: int = Field(..., description="Anzeigemodus (0=aus, 1=Volltonfarbe, 3=Regenbogen)")
+    color: list[int] | None = Field(default=None, description="RGB-Farb-Array (z.B. [255, 255, 255])")
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: int) -> int:
+        if v not in (0, 1, 3):
+            raise ValueError("mode must be one of [0, 1, 3]")
+        return v
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: list[int] | None) -> list[int] | None:
+        if v is not None:
+            if len(v) != 3:
+                raise ValueError("color must be a 3-element array")
+            for channel in v:
+                if not (0 <= channel <= 255):
+                    raise ValueError("color channels must be between 0 and 255")
+        return v
+
+class Point(BaseModel):
+    id: str
+    lat: float
+    lon: float
+    color: list[int]
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, v: list[int]) -> list[int]:
+        if len(v) != 3:
+            raise ValueError("color must be a 3-element array")
+        for channel in v:
+            if not (0 <= channel <= 255):
+                raise ValueError("color channels must be between 0 and 255")
+        return v
+
+class SetPointsRequest(BaseModel):
+    points: list[Point]
+
+
+class ChangePwmRequest(BaseModel):
+    """Anfrage-Payload zur Steuerung der Motor-PWM (weitergeleitet an den Pico als 'change_PWM')."""
+
+    mode: int = Field(..., description="Motormodus (0=aus, 1=mit RPM laufen)")
+    rpm: int | None = Field(default=None, ge=0, description="Ziel-RPM, wenn mode=1")
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: int) -> int:
+        if v not in (0, 1):
+            raise ValueError("mode must be one of [0, 1]")
+        return v

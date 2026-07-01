@@ -21,15 +21,19 @@ export DUMP1090_BACKOFF_INITIAL_S="${DUMP1090_BACKOFF_INITIAL_S:-${DUMP1090_POLL
 export DUMP1090_BACKOFF_MAX_S="${DUMP1090_BACKOFF_MAX_S:-15.0}"
 export DUMP1090_BACKOFF_MULTIPLIER="${DUMP1090_BACKOFF_MULTIPLIER:-2.0}"
 
-export GLOBE_MODE="${GLOBE_MODE:-udp}"
-export GLOBE_HTTP_URL="${GLOBE_HTTP_URL:-http://192.168.4.1/aircraft}"
-export GLOBE_HTTP_TIMEOUT_S="${GLOBE_HTTP_TIMEOUT_S:-1.0}"
-export GLOBE_UDP_HOST="${GLOBE_UDP_HOST:-10.42.0.1}"
-export GLOBE_UDP_PORT="${GLOBE_UDP_PORT:-5005}"
+export GLOBE_MODE="${GLOBE_MODE:-mqtt}"
+export GLOBE_MQTT_HOST="${GLOBE_MQTT_HOST:-test.mosquitto.org}"
+export GLOBE_MQTT_PORT="${GLOBE_MQTT_PORT:-1883}"
+export GLOBE_MQTT_TOPIC="${GLOBE_MQTT_TOPIC:-in-plane-sight}"
+export GLOBE_MQTT_QOS="${GLOBE_MQTT_QOS:-0}"
+export GLOBE_MQTT_RETAIN="${GLOBE_MQTT_RETAIN:-0}"
+export GLOBE_DUMMY_X="${GLOBE_DUMMY_X:-0}"
+export GLOBE_DUMMY_Y="${GLOBE_DUMMY_Y:-0}"
 
-# Put in position of the system to show the correct distance to the aircrafts
-export SYSTEM_LAT="${SYSTEM_LAT:-48.5756}"
-export SYSTEM_LON="${SYSTEM_LON:-9.739}"
+# Hier die aktuelle Position des Systems eintragen zur korrekten Berechnung der Distanz. 
+# Aktuelle Koordinaten entsprechen Hochschule Heilbronn, Techcampus
+export SYSTEM_LAT="${SYSTEM_LAT:-49.12194}"
+export SYSTEM_LON="${SYSTEM_LON:-9.21111}"
 
 export PLANESPOTTERS_BASE_URL="${PLANESPOTTERS_BASE_URL:-https://api.planespotters.net/pub/photos/hex}"
 export PLANESPOTTERS_TIMEOUT_S="${PLANESPOTTERS_TIMEOUT_S:-2.0}"

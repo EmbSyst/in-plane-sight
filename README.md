@@ -13,9 +13,7 @@ Die geplante Pipeline sieht so aus:
 * RasPi Backend liest `/tmp/aircraft.json` regelmäßig (z.B. alle 1s) und normalisiert die wichtigsten Felder (Flight, Lat/Lon, Altitude, Speed)
 * Touch-UI zeigt alle aktuell getrackten Flugzeuge an (kiosk-/touch-optimiert)
 * Auswahl eines Flugzeugs auf dem Touchscreen (Tap) sendet die Selection an das Backend
-* Backend leitet `lat/lon` (und Metadaten) über WLAN an den Holo-Globe-Controller weiter (modular: HTTP oder UDP)
-
-Das Repository befindet sich aktuell noch in einer frühen Phase und dient zunächst dazu, die geplante Struktur, den technischen Ablauf und die nächsten Entwicklungsschritte festzuhalten.
+* Backend publiziert die relevanten Holo-Globe-Daten per MQTT an einen öffentlichen Broker; der Pico empfängt diese Nachrichten als Subscriber
 
 ---
 
@@ -25,7 +23,7 @@ Unter `backend/` liegt ein schlankes FastAPI-Backend, das:
 
 * live Aircraft-Daten aus der lokalen Datei `/tmp/aircraft.json` (von `dump1090-fa` geschrieben) liest
 * die Daten als REST-API für das Touch-Frontend bereitstellt
-* bei Auswahl eines Flugzeugs dessen `lat/lon` modular an den Holo Globe weiterleitet (HTTP oder UDP, per ENV konfigurierbar)
+* bei Auswahl eines Flugzeugs die relevanten Daten in MQTT-Nachrichten für den Holo Globe übersetzt und publiziert
 * bei Auswahl eines Flugzeugs Metadaten und ein Foto über die Planespotters API nachlädt (inkl. Cache & Placeholder)
 
 **Touch-UI (Kiosk):**
@@ -61,7 +59,7 @@ chmod +x start.sh
 Overrides funktionieren inline:
 
 ```bash
-DUMP1090_FILE_PATH=/tmp/aircraft.json GLOBE_UDP_HOST=10.42.0.1 GLOBE_UDP_PORT=5005 ./start.sh
+DUMP1090_FILE_PATH=/tmp/aircraft.json ./start.sh
 
 # Systemposition (für Distanzberechnung in der UI):
 SYSTEM_LAT=49.121479 SYSTEM_LON=9.211960 ./start.sh
@@ -69,28 +67,101 @@ SYSTEM_LAT=49.121479 SYSTEM_LON=9.211960 ./start.sh
 
 Standardwerte in `start.sh`:
 * `DUMP1090_FILE_PATH=/tmp/aircraft.json`
-* `GLOBE_MODE=udp`
-* `GLOBE_UDP_HOST=10.42.0.1`
-* `GLOBE_UDP_PORT=5005`
+* `SYSTEM_LAT` / `SYSTEM_LON` für die Distanzberechnung im Frontend
+
+### MQTT-Übertragung zum Pico
+
+Die Kommunikation vom Raspberry Pi zum Pico ist aktuell MQTT-basiert und verwendet einen öffentlichen Broker:
+
+* **Broker:** `test.mosquitto.org`
+* **Port:** `1883`
+* **Topic:** `in-plane-sight`
+
+Die in `messages/message-list.txt` dokumentierten Nachrichtentypen sind:
+
+**1. Anzeige-Modus des Globe**
+
+```json
+{
+  "type": "change_display_mode",
+  "mode": 0,
+  "color": [255, 255, 255]
+}
+```
+
+* `mode = 0`: LEDs aus
+* `mode = 1`: gesamten Globe mit `color` füllen
+* `mode = 3`: RGB-Regenbogenmodus
+
+**2. Motorsteuerung per PWM**
+
+```json
+{
+  "type": "change_PWM",
+  "mode": 0,
+  "rpm": []
+}
+```
+
+* `mode = 0`: Motor aus
+* `mode = 1`: PWM-Werte aus der gewünschten Drehzahl ableiten
+
+**3. Flugzeugpositionen setzen (set_points)**
+
+```json
+{
+  "type": "set_points",
+  "points": [
+    { "id": "DLH123", "lat": 48.35, "lon": 11.78, "color": [255, 255, 255] }
+  ]
+}
+```
+
+* Der Raspberry Pi extrahiert Längen- und Breitengrad sowie die Flugnummer aus den ADS-B Daten und sendet diese an den Pico. Der Pico kümmert sich um die Umrechnung auf den Framebuffer.
 
 ### Autostart (Boot-Konfiguration)
 
-Um das System auf dem Raspberry Pi (Ubuntu 24.04) vollautomatisch beim Hochfahren zu starten, sind zwei Komponenten eingerichtet: ein Hintergrunddienst für das Backend und ein Desktop-Autostart für das Kiosk-Frontend.
+Um das System auf dem Raspberry Pi vollautomatisch beim Hochfahren zu starten, sind zwei Komponenten eingerichtet: ein Hintergrunddienst für das Backend und ein isolierter Kiosk-Start für das Frontend.
 
 **1. Hintergrunddienste (Systemd)**
-Ein zentrales Skript startet `dump1090` und das FastAPI-Backend im Hintergrund. 
+
+Ein zentrales Skript startet das FastAPI-Backend im Hintergrund, völlig unabhängig von der Bildschirmausgabe.
 * **Startup-Skript:** `/usr/local/bin/startup.sh`
 * **Systemd-Service:** `/etc/systemd/system/backend.service`
 
 Steuern lässt sich der Dienst via Terminal:
-* Status prüfen: `sudo systemctl status backend.service`
-* Neu starten: `sudo systemctl restart backend.service`
+* MQTT-Broker Status prüfen: `sudo systemctl status mosquitto`
+* MQTT-Broker neu starten: `sudo systemctl restart mosquitto`
+* Backend Status prüfen: `sudo systemctl status backend.service`
+* Backend neu starten: `sudo systemctl restart backend.service`
 
-**2. Kiosk-Frontend (Desktop Autostart)**
-Sobald die grafische Oberfläche geladen ist, wird der Chromium-Browser automatisch im Vollbildmodus gestartet.
-* **Autostart-Datei:** `/home/pi/.config/autostart/kiosk.desktop`
+> **Hinweis:** `dump1090-fa` liefert weiterhin separat die Datei `/tmp/aircraft.json`; das Startskript dieser Web-App startet `dump1090` nicht automatisch.
 
-> **Hinweis:** Der Kiosk-Autostart wartet initial einige Sekunden, um sicherzustellen, dass das Backend unter `localhost:8000` vollständig erreichbar ist, bevor die Seite aufgerufen wird.
+**2. Kiosk-Frontend (Cage Wayland Compositor)**
+
+Um das System ressourcenschonend und "ausbruchsicher" (keine Taskleiste, keine Wischgesten) zu betreiben, verzichten wir auf einen kompletten Desktop. Stattdessen bootet der Raspberry Pi in die Textkonsole, loggt sich automatisch ein und startet den Browser isoliert über den Kiosk-Compositor **Cage**.
+
+* **Autologin:** Konfiguriert über einen Getty-Override unter `/etc/systemd/system/getty@tty1.service.d/override.conf`
+* **Startbefehl:** Liegt in der Datei `~/.bash_profile` des Benutzers:
+  ```bash
+  if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
+      cage -s -- bash -c "sleep 10 && chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8000"
+  fi
+  ```
+
+> **Hinweis:** Der `sleep 10` Befehl stellt sicher, dass der Backend-Dienst im Hintergrund vollständig hochgefahren und erreichbar ist, bevor der Browser die URL aufruft.
+
+**Zurück zum normalen Desktop wechseln (Wartungsmodus):**
+Falls für Anpassungen wieder die normale grafische Benutzeroberfläche (Desktop) benötigt wird, kann das System einfach per SSH oder Tastatur wieder umgestellt werden:
+1. Standard-Bootmodus auf "Desktop" setzen:
+   ```bash
+   sudo systemctl set-default graphical.target
+   ```
+2. Raspberry Pi neu starten:
+   ```bash
+   sudo reboot
+   ```
+*(Um nach der Wartung wieder in den Kiosk-Modus zurückzukehren, lautet der Befehl: `sudo systemctl set-default multi-user.target`)*
 
 ### Tests
 
@@ -107,7 +178,7 @@ python3 -m unittest discover -s backend/tests -p "test_*.py"
 Beim Tap auf ein Flugzeug ruft das Backend zusätzlich die Planespotters API anhand des `hex` Codes auf und liefert eine Bild-URL sowie (best-effort) `type` und `airline` zurück. Um Rate-Limits zu vermeiden, werden Ergebnisse pro `hex` im Backend gecacht; bei fehlendem Internet/keinen Fotos wird ein Placeholder-Bild genutzt.
 
 Optionale Umgebungsvariablen:
-* `PLANESPOTTERS_BASE_URL` (Default: `[https://api.planespotters.net/pub/photos/hex](https://api.planespotters.net/pub/photos/hex)`)
+* `PLANESPOTTERS_BASE_URL` (Default: `https://api.planespotters.net/pub/photos/hex`)
 * `PLANESPOTTERS_TIMEOUT_S` (Default: `2.0`)
 
 ### Lokale Datenquelle (dump1090 File)
@@ -123,19 +194,25 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 
 * **`.github/workflows/ci.yml`**: Definition der GitHub Actions CI/CD-Pipeline, die bei jedem Push und Pull Request automatisch die Tests ausführt.
 * **`backend/`**: Enthält den gesamten Backend- und Frontend-Code.
-* **`backend/app/main.py`**: Der Haupteinstiegspunkt der Anwendung. Definiert die REST-API-Endpunkte (`/api/aircraft`, `/api/select`) und startet den Hintergrund-Poller.
-* **`backend/app/models.py`**: Pydantic-Datenmodelle (z.B. `Aircraft`, `AircraftMetadata`) für Validierung und Typensicherheit.
-* **`backend/app/state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory), wie z.B. Konfigurationen für das Auslesen der dump1090-Daten.
+* **`backend/app/main.py`**: Der Haupteinstiegspunkt der Anwendung. Definiert die REST-API-Endpunkte (`/api/aircraft`, `/api/select`, `/api/globe/mode`, `/api/globe/points`) und startet den Hintergrund-Poller.
+* **`backend/app/models.py`**: Pydantic-Datenmodelle für Validierung und Typensicherheit (z.B. `Aircraft`, `SetPointsRequest`, `DisplayModeRequest`).
+* **`backend/app/state.py`**: Speichert den globalen Zustand der Anwendung (In-Memory).
 * **`backend/app/utils.py`**: Hilfsfunktionen, insbesondere für das sichere Auslesen von Umgebungsvariablen.
-* **`backend/app/services/dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei von dump1090.
-* **`backend/app/services/globe.py`**: Behandelt die Kommunikation (UDP oder HTTP) mit dem Mikrocontroller des Holo Globes.
-* **`backend/app/services/planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern und Metadaten inkl. Caching-Logik.
-* **`backend/static/index.html`**: Das HTML-Grundgerüst der Benutzeroberfläche.
-* **`backend/static/styles.css`**: Das Styling, optimiert für Touchscreens und dunkle Umgebungen (Dark Mode).
-* **`backend/static/app.js`**: Die JavaScript-Logik des Frontends. Ruft Daten vom Backend ab und aktualisiert die UI.
-* **`backend/static/aircraft-placeholder.svg`**: Ein Fallback-Bild (Platzhalter), falls für ein Flugzeug kein Foto über die Planespotters API gefunden wird.
-* **`backend/tests/test_*.py`**: Backend-Tests (API-Endpunkte, ENV-Parsing, Globe-Forwarding, Planespotters-Parsing/Cache).
-* **`backend/requirements.txt`**: Liste aller benötigten Python-Abhängigkeiten (z.B. fastapi, uvicorn, httpx).
+* **`backend/app/services/dump1090.py`**: Logik zum Einlesen und Parsen der lokalen `aircraft.json`-Datei.
+* **`backend/app/services/globe.py`**: Behandelt die Weitergabe der Holo-Globe-Daten per MQTT (Display Modes und Set Points).
+* **`backend/app/services/planespotters.py`**: Integration der Planespotters.net API zum Abrufen von Flugzeugbildern.
+* **`backend/static/`**: Die Dateien der Benutzeroberfläche (`index.html`, `styles.css`, `app.js`). Beinhaltet jetzt zwei Tabs ("Aircrafts" und "Globe Control").
+* **`backend/tests/test_*.py`**: Backend-Tests.
+* **`backend/requirements.txt`**: Liste aller benötigten Python-Abhängigkeiten.
 * **`architecture.md`**: Ein Mermaid.js-Diagramm, das die Systemarchitektur visuell darstellt.
+* **`messages/`**: Spezifikationen für die Kommunikation mit dem Pico.
+  * **`message-list.txt`**: Dokumentation der MQTT-Nachrichtentypen (`change_display_mode`, `change_PWM`, `set_points`).
+* **`pico/`**: Enthält die Firmware und Render-Skripte für den Raspberry Pi Pico W.
+  * **`main.py`**: MicroPython-Einstiegspunkt für den Pico. Verbindet WLAN und MQTT, verarbeitet die `set_points` Nachrichten.
+  * **`render_worldmap.py`**: PC-seitiges Skript zum Rendern einer equirektangulären Karte in einen Binär-Framebuffer (`framebuffer.bin`) für den Pico.
+  * **`display.py`, `motor.py`, `rpm.py`, `netz.py`**: Modulare Bestandteile der Firmware für Hardware-Steuerung und Netzwerk.
+  * **`state.py`**, **`config.py`**: Geteilter Status und Hardware-Konfigurationen für die Pico-Firmware.
+  * **`README.md`**: Detaillierte Spezifikation der POV-Globe Architektur und des Framebuffer-Konzepts.
 * **`start.sh`**: Ein Shell-Skript, das den einfachen und schnellen Start der Anwendung mit den korrekten Umgebungsvariablen ermöglicht.
+* **`presentation_outline.md`**: Leitfaden für eine Projektpräsentation (Frontend & Daten-Pipeline).
 * **`README.md`**: Diese Dokumentation.
