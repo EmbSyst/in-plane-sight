@@ -10,7 +10,7 @@ Die geplante Pipeline sieht so aus:
 * Erfassung der Rohdaten über einen SDR-Empfänger
 * Demodulation und Decoding der Datenpakete
 * Decoding der ADS-B Frames und Bereitstellung der Live-Daten via `dump1090-fa` (lokales JSON-Snapshot-File)
-* RasPi Backend liest `/tmp/aircraft.json` regelmäßig (z.B. alle 1s) und normalisiert die wichtigsten Felder (Flight, Lat/Lon, Altitude, Speed)
+* RasPi Backend liest `/tmp/aircraft.json` regelmäßig und normalisiert die wichtigsten Felder (Flight, Lat/Lon, Altitude, Speed)
 * Touch-UI zeigt alle aktuell getrackten Flugzeuge an (kiosk-/touch-optimiert)
 * Auswahl eines Flugzeugs auf dem Touchscreen (Tap) sendet die Selection an das Backend
 * Backend publiziert die relevanten Holo-Globe-Daten per MQTT an einen öffentlichen Broker; der Pico empfängt diese Nachrichten als Subscriber
@@ -138,19 +138,35 @@ Steuern lässt sich der Dienst via Terminal:
 
 > **Hinweis:** `dump1090-fa` liefert weiterhin separat die Datei `/tmp/aircraft.json`; das Startskript dieser Web-App startet `dump1090` nicht automatisch.
 
-**2. Kiosk-Frontend (Cage Wayland Compositor)**
+**2. Kiosk-Frontend (Sway Wayland Compositor)**
 
-Um das System ressourcenschonend und "ausbruchsicher" (keine Taskleiste, keine Wischgesten) zu betreiben, verzichten wir auf einen kompletten Desktop. Stattdessen bootet der Raspberry Pi in die Textkonsole, loggt sich automatisch ein und startet den Browser isoliert über den Kiosk-Compositor **Cage**.
+Um das System unter Ubuntu 24.04 ressourcenschonend und "ausbruchsicher" (keine Taskleiste, keine Wischgesten) zu betreiben – und gleichzeitig unser Hardware-Display korrekt zu drehen – verzichten wir auf einen kompletten Desktop. Stattdessen bootet der Raspberry Pi in die Textkonsole, loggt sich automatisch ein und startet den Browser isoliert über den Wayland-Fenstermanager **Sway**.
 
 * **Autologin:** Konfiguriert über einen Getty-Override unter `/etc/systemd/system/getty@tty1.service.d/override.conf`
-* **Startbefehl:** Liegt in der Datei `~/.bash_profile` des Benutzers:
+* **Sway-Konfiguration:** Liegt unter `~/.config/sway/config`. Hier wird das Bild gedreht, der Touchscreen kalibriert und der Browser (Chromium als Snap-Paket) mit Wayland-Flags gestartet:
+  ```text
+  # Bildschirm und Touch-Matrix um 180 Grad drehen
+  output * transform 180
+  input type:touch {
+      calibration_matrix -1 0 1 0 -1 1
+  }
+  
+  # Hintergrund (blau) und Kiosk-Optik (keine Ränder)
+  output * bg #0000AA solid_color
+  default_border none
+  hide_edge_borders both
+  
+  # Start des Frontends
+  exec bash -c "sleep 10 && /snap/bin/chromium --enable-features=UseOzonePlatform --ozone-platform=wayland --kiosk --noerrdialogs --disable-infobars http://localhost:8000"
+  ```
+* **Startbefehl:** Liegt in der Datei `~/.bash_profile` des Benutzers und ruft Sway direkt nach dem Login auf:
   ```bash
   if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
-      cage -s -- bash -c "sleep 10 && chromium-browser --kiosk --noerrdialogs --disable-infobars http://localhost:8000"
+      exec sway
   fi
   ```
 
-> **Hinweis:** Der `sleep 10` Befehl stellt sicher, dass der Backend-Dienst im Hintergrund vollständig hochgefahren und erreichbar ist, bevor der Browser die URL aufruft.
+> **Hinweis:** Der `sleep 10` Befehl in der Sway-Konfiguration stellt sicher, dass der Backend-Dienst im Hintergrund vollständig hochgefahren und erreichbar ist, bevor der Browser die URL aufruft.
 
 **Zurück zum normalen Desktop wechseln (Wartungsmodus):**
 Falls für Anpassungen wieder die normale grafische Benutzeroberfläche (Desktop) benötigt wird, kann das System einfach per SSH oder Tastatur wieder umgestellt werden:
@@ -217,3 +233,4 @@ Hier ist eine Übersicht über die wichtigsten Dateien und Ordner in diesem Proj
 * **`start.sh`**: Ein Shell-Skript, das den einfachen und schnellen Start der Anwendung mit den korrekten Umgebungsvariablen ermöglicht.
 * **`presentation_outline.md`**: Leitfaden für eine Projektpräsentation (Frontend & Daten-Pipeline).
 * **`README.md`**: Diese Dokumentation.
+* **`SETUP.md`**: Setup-Guide für die Inbetriebnahme des Holo-Globes.
