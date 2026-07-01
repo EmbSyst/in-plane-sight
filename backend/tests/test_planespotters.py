@@ -1,8 +1,8 @@
 """
-Tests for Planespotters integration.
+Tests für die Planespotters Integration.
 
-These tests mock outbound HTTP calls to avoid network dependency and validate caching,
-parsing and fallback behavior.
+Diese Tests mocken ausgehende HTTP-Aufrufe, um Netzwerkabhängigkeiten zu vermeiden und das Caching,
+Parsing und Fallback-Verhalten zu validieren.
 """
 
 from __future__ import annotations
@@ -20,6 +20,10 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             self.skipTest("httpx is not installed")
 
     async def test_caches_by_hex_and_parses_fields(self) -> None:
+        """
+        Prüft, ob die API-Antwort korrekt in die Pydantic-Modelle geparst wird und
+        ob nachfolgende Aufrufe für den gleichen Hex-Code aus dem Cache bedient werden.
+        """
         from backend.app.services import planespotters
 
         payload = {
@@ -64,6 +68,10 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(instance.get.await_count, 1)
 
     async def test_sends_browser_like_headers(self) -> None:
+        """
+        Stellt sicher, dass bei API-Aufrufen Browser-ähnliche Header (User-Agent, Origin)
+        mitgesendet werden, um 403-Sperren durch Firewalls zu vermeiden.
+        """
         from backend.app.services import planespotters
 
         payload = {
@@ -108,6 +116,10 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             )
 
     async def test_parses_type_and_airline_from_link_when_missing(self) -> None:
+        """
+        Testet die Fallback-Logik: Wenn die API den Flugzeugtypen und die Airline nicht
+        explizit liefert, sollen diese aus dem Bild-Link geparst werden.
+        """
         from backend.app.services import planespotters
 
         payload = {
@@ -146,6 +158,10 @@ class TestPlanespotters(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(instance.get.await_count, 1)
 
     async def test_fallback_to_placeholder_on_404(self) -> None:
+        """
+        Stellt sicher, dass bei einem 404 (kein Bild gefunden) das SVG-Platzhalterbild
+        zurückgegeben wird und die Applikation nicht abstürzt.
+        """
         from backend.app.services import planespotters
 
         class _Resp404:

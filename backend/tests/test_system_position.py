@@ -1,7 +1,7 @@
 """
-Tests for resolving the system's own position (lat/lon).
+Tests für die Ermittlung der eigenen Systemposition (Lat/Lon).
 
-These tests use only the Python standard library and do not require FastAPI.
+Diese Tests verwenden nur die Python-Standardbibliothek und benötigen kein FastAPI.
 """
 
 from __future__ import annotations

@@ -1,8 +1,8 @@
 """
-Tests for the globe forwarding module.
+Tests für das Globe Forwarding Modul.
 
-The forwarding layer is designed to be modular, so these tests focus on the
-configuration gatekeeping behavior that should be stable across transports.
+Die Weiterleitungsschicht (Forwarding Layer) ist modular aufgebaut, daher konzentrieren sich diese
+Tests auf das Konfigurations-Gatekeeping-Verhalten, welches über verschiedene Transports hinweg stabil sein sollte.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
             pass
 
     async def test_disabled_mode_does_not_send(self) -> None:
+        """Stellt sicher, dass bei 'GLOBE_MODE=disabled' keine Nachrichten gesendet werden."""
         os.environ["GLOBE_MODE"] = "disabled"
         forward_to_globe = self._forward_to_globe_or_skip()
 
@@ -51,6 +52,7 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.mode, "disabled")
 
     async def test_missing_position_is_rejected(self) -> None:
+        """Prüft, dass Flugzeuge ohne Lat/Lon-Position vom Forwarding abgelehnt werden."""
         os.environ["GLOBE_MODE"] = "mqtt"
         forward_to_globe = self._forward_to_globe_or_skip()
 
@@ -61,6 +63,7 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertIn("lat/lon", (result.detail or "").lower())
 
     async def test_unknown_mode_is_rejected(self) -> None:
+        """Prüft, dass ein ungültiger 'GLOBE_MODE' korrekt abgefangen und abgelehnt wird."""
         os.environ["GLOBE_MODE"] = "something-else"
         forward_to_globe = self._forward_to_globe_or_skip()
 
@@ -71,6 +74,10 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertIn("unknown", (result.detail or "").lower())
 
     async def test_mqtt_mode_publishes_selection_messages(self) -> None:
+        """
+        Stellt sicher, dass bei Auswahl eines Flugzeugs im MQTT-Modus die korrekten
+        Nachrichten (Display Mode und Set Points) an den konfigurierten Broker gesendet werden.
+        """
         from unittest.mock import patch
 
         globe = self._globe_module_or_skip()
@@ -134,6 +141,10 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(points_payload["points"][0]["lon"], 2.0)
 
     async def test_mqtt_mode_reuses_persistent_client(self) -> None:
+        """
+        Prüft, dass der MQTT-Client bei mehreren Sendevorgängen wiederverwendet wird
+        (kein neuer Verbindungsaufbau pro Flugzeug).
+        """
         from unittest.mock import patch
 
         globe = self._globe_module_or_skip()
@@ -178,6 +189,10 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(fake_client.publish_calls, 4)
 
     async def test_change_pwm_publishes_motor_messages(self) -> None:
+        """
+        Validiert, dass Änderungen an der Motor-PWM-Steuerung korrekt in MQTT-Nachrichten
+        übersetzt und gesendet werden (Ein/Aus und RPM).
+        """
         from unittest.mock import patch
 
         globe = self._globe_module_or_skip()

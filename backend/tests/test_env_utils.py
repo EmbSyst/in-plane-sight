@@ -1,7 +1,7 @@
 """
-Tests for environment variable helpers.
+Tests für die Umgebungsvariablen-Hilfsfunktionen.
 
-These utilities are used across the backend to keep configuration parsing consistent.
+Diese Utilities werden im gesamten Backend verwendet, um das Parsen von Konfigurationen konsistent zu halten.
 """
 
 from __future__ import annotations

@@ -1,8 +1,8 @@
 """
-API-level tests for the FastAPI application.
+API-Level Tests für die FastAPI-Anwendung.
 
-These tests are optional at runtime: if FastAPI/Starlette are not installed in the
-current environment, the tests are skipped instead of failing.
+Diese Tests sind zur Laufzeit optional: Wenn FastAPI/Starlette in der aktuellen
+Umgebung nicht installiert sind, werden die Tests übersprungen anstatt fehlzuschlagen.
 """
 
 from __future__ import annotations
@@ -17,13 +17,13 @@ class TestApiEndpoints(unittest.TestCase):
         try:
             from starlette.testclient import TestClient  # type: ignore
         except Exception as exc:  # pragma: no cover
-            self.skipTest(f"starlette TestClient not available: {exc}")
+            self.skipTest(f"starlette TestClient ist nicht verfügbar: {exc}")
 
         try:
             from backend.app.main import create_app
             from backend.app.models import Aircraft
         except Exception as exc:  # pragma: no cover
-            self.skipTest(f"backend app dependencies not available: {exc}")
+            self.skipTest(f"backend app Abhängigkeiten sind nicht verfügbar: {exc}")
 
         return TestClient, create_app, Aircraft
 
@@ -44,17 +44,17 @@ class TestApiEndpoints(unittest.TestCase):
             sample = [Aircraft(hex="abc123", flight="TEST123", lat=1.0, lon=2.0, altitude=1000, speed=250)]
             state = app.state.dump1090
         
-        # When TestClient(app) is created, it fires the 'startup' event, which starts the background poller.
-        # We need to set the state *after* the client has started, or cancel the task so it doesn't overwrite it.
-        # Alternatively, we just mock the fetcher or override the state properties inside the block.
+        # Wenn der TestClient(app) erstellt wird, wird das 'startup' Event ausgelöst, was den Background Poller startet.
+        # Wir müssen den Zustand *nach* dem Start des Clients setzen, oder den Task abbrechen, damit er ihn nicht überschreibt.
+        # Alternativ mocken wir den Fetcher oder überschreiben die State Properties innerhalb des Blocks.
         
             with TestClient(app) as client, mock.patch.dict(
                 os.environ,
                 {"SYSTEM_LAT": "49.121479", "SYSTEM_LON": "9.211960"},
                 clear=False,
             ):
-                # Cancel the background poller so it doesn't overwrite our mock data
-                # with connection errors (since dump1090 isn't actually running)
+                # Den Background Poller abbrechen, damit er unsere Mock-Daten nicht
+                # mit Verbindungsfehlern überschreibt (da dump1090 nicht wirklich läuft)
                 if app.state.poll_task:
                     app.state.poll_task.cancel()
                 
