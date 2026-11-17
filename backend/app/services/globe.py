@@ -65,7 +65,7 @@ def _mqtt_client_settings() -> tuple[str, int, str, int, bool, str | None, str |
     Rückgabe: (host, port, topic, qos, retain, username, password)
     """
     return (
-        get_env("GLOBE_MQTT_HOST", "test.mosquitto.org"),
+        get_env("GLOBE_MQTT_HOST", "localhost"),
         get_env_int("GLOBE_MQTT_PORT", 1883),
         get_env("GLOBE_MQTT_TOPIC", "in-plane-sight"),
         get_env_int("GLOBE_MQTT_QOS", 0),

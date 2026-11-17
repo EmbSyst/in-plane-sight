@@ -13,7 +13,7 @@ Die geplante Pipeline sieht so aus:
 * RasPi Backend liest `/tmp/aircraft.json` regelmäßig und normalisiert die wichtigsten Felder (Flight, Lat/Lon, Altitude, Speed)
 * Touch-UI zeigt alle aktuell getrackten Flugzeuge an (kiosk-/touch-optimiert)
 * Auswahl eines Flugzeugs auf dem Touchscreen (Tap) sendet die Selection an das Backend
-* Backend publiziert die relevanten Holo-Globe-Daten per MQTT an einen öffentlichen Broker; der Pico empfängt diese Nachrichten als Subscriber
+* Backend publiziert die relevanten Holo-Globe-Daten per MQTT an den lokalen Broker auf dem Pi (Mosquitto, eigener WLAN-Hotspot); der Pico empfängt diese Nachrichten als Subscriber
 
 ---
 
@@ -71,9 +71,9 @@ Standardwerte in `start.sh`:
 
 ### MQTT-Übertragung zum Pico
 
-Die Kommunikation vom Raspberry Pi zum Pico ist aktuell MQTT-basiert und verwendet einen öffentlichen Broker:
+Die Kommunikation vom Raspberry Pi zum Pico ist MQTT-basiert. Der Broker (Mosquitto) läuft lokal auf dem Pi, der Pico ist mit dem WLAN-Hotspot des Pi verbunden (siehe [SETUP.md](SETUP.md), Abschnitt 3):
 
-* **Broker:** `test.mosquitto.org`
+* **Broker:** `localhost` aus Sicht des Backends, `10.42.0.1` aus Sicht des Pico
 * **Port:** `1883`
 * **Topic:** `in-plane-sight`
 

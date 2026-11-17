@@ -21,24 +21,24 @@ Dieses Dokument beschreibt die physische Einrichtung für das "In Plane Sight"-P
 
 Da das System ein DSI-Display nutzt und Ubuntu 24.04 zum Einsatz kommt, verwenden wir **Sway** als ressourcenschonenden, ausbruchsicheren Kiosk-Fenstermanager, damit während der Nutzung nicht aus dem Frontent "ausgebrochen" werden kann.
 
-Das System startet nach dem Einstecken der Stromversorgung automatisch, loggt sich automatisch ein (Informationen zu Benutzername und Passwort in der schriftlichen Dokumentation) und aktiviert die Hintergrundprozesse des Raspberry Pi 5. 
+Das System startet nach dem Einstecken der Stromversorgung automatisch, loggt sich automatisch ein (Benutzername `hologlobe`, Passwort `hologlobe`) und aktiviert die Hintergrundprozesse des Raspberry Pi 5. 
 
 Vor dem ersten Start sollte über den in Punkt 5 beschriebenen Prozess aus dem Kiosk-Modus ausgebrochen werden und im Repo des Projekts einmal der aktuelle Status des Projekts zur Sicherheit gepullt werden.
 
 ```bash
-cd /home/pi/Projekt/backend/in-plane-sight
+cd /home/hologlobe/Projekt/backend/in-plane-sight
 git pull 
 ```
 
 
 ### 2.1 Neuinstallation (z.B. nach SD-Karten-Defekt)
 
-1. Mit dem Raspberry Pi Imager **Ubuntu Desktop 24.04 LTS (64-bit)** auf eine neue SD-Karte flashen, booten, Benutzer `pi` anlegen und WLAN verbinden.
-2. Repo klonen und Setup-Skript ausführen (als `pi`, **ohne** sudo):
+1. Mit dem Raspberry Pi Imager **Ubuntu Desktop 24.04 LTS (64-bit)** auf eine neue SD-Karte flashen, booten, Benutzer `hologlobe` (Passwort `hologlobe`) anlegen und WLAN verbinden.
+2. Repo klonen und Setup-Skript ausführen (als `hologlobe`, **ohne** sudo):
 
 ```bash
-git clone https://github.com/EmbSyst/in-plane-sight.git /home/pi/Projekt/backend/in-plane-sight
-cd /home/pi/Projekt/backend/in-plane-sight
+git clone https://github.com/EmbSyst/in-plane-sight.git /home/hologlobe/Projekt/backend/in-plane-sight
+cd /home/hologlobe/Projekt/backend/in-plane-sight
 ./deploy/setup-pi.sh            # optional: SYSTEM_LAT=... SYSTEM_LON=... ./deploy/setup-pi.sh
 sudo reboot
 ```
@@ -47,9 +47,11 @@ Das Skript installiert und richtet ein: `dump1090-fa` mit HackRF-Unterstützung 
 
 ## 3. WLAN Konfiguration
 
-Es ist wichtig dass der Raspberry Pi 5 und der Pico 2W eine Verbindung zu einem WLAN-Netzwerk haben. 
+Der Raspberry Pi 5 spannt mit seinem **eingebauten WLAN** einen eigenen Hotspot auf (`in-plane-sight` / `planespotter`, Pi = `10.42.0.1`) und betreibt darauf den **lokalen MQTT-Broker** (Mosquitto). Der Pico verbindet sich nur mit diesem Hotspot – es muss kein fremdes Netzwerk konfiguriert werden.
 
-Dieses muss nicht unbedingt das selbe Netzwerk sein, da wir einen öffentlichen MQTT-Broker nutzen. 
+Für Internet (Flugzeugfotos, `git pull`) nutzt der Pi einen **USB-WLAN-Stick**. Ohne Internet läuft alles außer den Fotos weiter (dann Platzhalterbild).
+
+Hotspot und Broker richtet `deploy/setup-pi.sh` ein. Wichtig: Den USB-Stick **vor** dem Skript einstecken und damit ins Internet verbinden, denn das eingebaute WLAN wird vom Skript zum Hotspot umgestellt (eine bestehende WLAN-Verbindung darauf bricht ab).
 
 ### 3.1 WLAN Konfiguration des Raspberry Pi 5
 
@@ -63,10 +65,10 @@ WLAN-Netzwerke in der Nähe anzeigen:
 ```bash
 nmcli device wifi list
 ```
-Mit einem WLAN-Netzwerk verbinden:
+Mit einem WLAN-Netzwerk verbinden – immer über den **USB-Stick** (Interface-Name aus `nmcli device`, meist `wlx…`), nicht über das eingebaute WLAN (das ist der Hotspot):
 
 ```bash
-sudo nmcli device wifi connect MEINE-SSID password MEIN-PASSWORT
+sudo nmcli device wifi connect MEINE-SSID password MEIN-PASSWORT ifname <usb-stick-interface>
 ```
 Überprüfen ob die Verbindung erfolgreich war:
 
@@ -101,18 +103,16 @@ sudo reboot
 
 Um die WLAN-Konfiguration des Raspberry Pi Pico 2W zu ändern, bitte wie folgt vorgehen:
 
-In der Datei `config.py` des Pico muss die Konfiguration des WLANs geändert werden.
-
-Folgende Netzwerke sind aktuell hinterlegt:
+Normalerweise ist nichts zu tun: Der Pico verbindet sich mit dem Hotspot des Pi. In `config.py` steht:
 
 ```python
 WIFI_NETWORKS = [
-    ("embedded", "c384c8c3"),
     ("in-plane-sight", "planespotter"),
 ]
+MQTT_BROKER = "10.42.0.1"
 ```
 
-Diese können bei Bedarf geändert werden.
+Werden SSID/Passwort des Hotspots geändert (`HOTSPOT_SSID=... HOTSPOT_PASS=... ./deploy/setup-pi.sh`), müssen sie hier ebenfalls angepasst und `config.py` neu auf den Pico geladen werden.
 
 ## 4. Benutzung des Holo-Globes
 

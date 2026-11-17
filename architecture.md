@@ -21,7 +21,7 @@ flowchart LR
 
   subgraph Internet["Internet"]
     Planespotters["Planespotters API\n/pub/photos/hex/{hex}"]
-    Broker["Public MQTT Broker\ntest.mosquitto.org:1883"]
+    Broker["Lokaler MQTT Broker (Mosquitto auf dem Pi)\nlocalhost / 10.42.0.1:1883"]
   end
 
   subgraph Globe["Holo Globe Microcontroller"]

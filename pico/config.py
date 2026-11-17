@@ -73,13 +73,13 @@ RPM_DUTY_CAP     = 16384      # Failsafe: max. Duty (~25% von 65535; ~knapp uebe
 # Echte Zugangsdaten NICHT ins git committen.
 # Netzwerke in Prioritaetsreihenfolge: erst Haupt-AP, dann Fallback(s).
 # Wird der Haupt-AP nicht gefunden, schaltet netz.py automatisch aufs naechste.
+# Nur der Hotspot des Pi 5 (deploy/setup-pi.sh): dort laeuft der MQTT-Broker.
 WIFI_NETWORKS = [
-    ("embedded", "c384c8c3"),
     ("in-plane-sight", "planespotter"),
 ]
 WIFI_TIMEOUT_S   = 30          # Boot: max. Gesamt-Wartezeit auf WLAN (auf die Netze aufgeteilt)
 
-MQTT_BROKER      = "test.mosquitto.org"
+MQTT_BROKER      = "10.42.0.1"  # Pi 5 im eigenen Hotspot (NetworkManager 'shared')
 MQTT_PORT        = 1883
 MQTT_CLIENT_ID   = b"in-plane-sight-pico"
 MQTT_TOPIC       = b"in-plane-sight"
