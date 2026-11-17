@@ -34,7 +34,8 @@ fi
 make -C "$DUMP1090_DIR" RTLSDR=no BLADERF=no LIMESDR=no SOAPYSDR=no HACKRF=yes
 
 echo "==> Python-Umgebung fürs Backend"
-[[ -d "$REPO_DIR/.venv" ]] || python3 -m venv "$REPO_DIR/.venv"
+# Kaputte venv (z.B. Repo verschoben -> Pfade in bin/* stimmen nicht mehr) neu anlegen
+"$REPO_DIR/.venv/bin/pip" --version >/dev/null 2>&1 || python3 -m venv --clear "$REPO_DIR/.venv"
 "$REPO_DIR/.venv/bin/pip" install -r "$REPO_DIR/backend/requirements.txt"
 chmod +x "$REPO_DIR/start.sh"
 
