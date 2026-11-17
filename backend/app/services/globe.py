@@ -186,6 +186,14 @@ async def publish_set_points(points: list[dict[str, Any]]) -> GlobeForwardResult
     return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"set points not supported for mode={globe_mode!r}")
 
 
+async def publish_clear_points() -> GlobeForwardResult:
+    """Entfernt alle Punkte vom Globe (z.B. nach dem Abwählen eines Flugzeugs)."""
+    globe_mode = get_env("GLOBE_MODE", "mqtt").lower()
+    if globe_mode != "mqtt":
+        return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"clear points not supported for mode={globe_mode!r}")
+    return await _publish_mqtt_messages([{"type": "clear_points"}])
+
+
 def _rpm_to_pwm_values(mode: int, rpm: int | None) -> list[int]:
     """Wandelt den gewünschten Motormodus/RPM in eine Liste von Integern um, die der Pico erwartet.
 
@@ -217,9 +225,12 @@ async def publish_change_pwm(mode: int, rpm: int | None = None) -> GlobeForwardR
     return GlobeForwardResult(mode=globe_mode, sent=False, detail=f"change_PWM not supported for mode={globe_mode!r}")
 
 
-async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
+async def forward_to_globe(aircraft: Aircraft, switch_to_map: bool = True) -> GlobeForwardResult:
     """
     Leitet ein ausgewähltes Flugzeug an den Globe weiter.
+
+    switch_to_map=True (Erstauswahl) schaltet zusätzlich auf die Weltkarte (mode 2).
+    Live-Updates nutzen False, damit ein im Frontend gewählter Anzeigemodus erhalten bleibt.
 
     Umgebungsvariablen:
     - GLOBE_MODE: disabled | mqtt
@@ -234,10 +245,9 @@ async def forward_to_globe(aircraft: Aircraft) -> GlobeForwardResult:
         return GlobeForwardResult(mode=mode, sent=False, detail="aircraft has no position (lat/lon missing)")
 
     if mode == "mqtt":
-        messages = [
-            {"type": "change_display_mode", "mode": 2, "color": [255, 255, 255]},
-            _set_points_payload(aircraft),
-        ]
+        messages = [_set_points_payload(aircraft)]
+        if switch_to_map:
+            messages.insert(0, {"type": "change_display_mode", "mode": 2, "color": [255, 255, 255]})
         return await _publish_mqtt_messages(messages)
 
     return GlobeForwardResult(mode=mode, sent=False, detail=f"unknown GLOBE_MODE={mode!r}")

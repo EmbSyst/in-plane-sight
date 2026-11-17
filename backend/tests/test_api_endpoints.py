@@ -87,6 +87,7 @@ class TestApiEndpoints(unittest.TestCase):
         TestClient, create_app, Aircraft = self._imports_or_skip()
         from backend.app.models import AircraftMetadata, GlobeForwardResult
 
+        clear_mock = mock.AsyncMock(return_value=GlobeForwardResult(sent=True, mode="mqtt", detail=None))
         with mock.patch.dict(os.environ, {"GLOBE_MODE": "disabled"}, clear=False):
             app = create_app()
             state = app.state.dump1090
@@ -94,7 +95,7 @@ class TestApiEndpoints(unittest.TestCase):
             with TestClient(app) as client, mock.patch(
                 "backend.app.main.forward_to_globe",
                 new=mock.AsyncMock(return_value=GlobeForwardResult(sent=True, mode="mqtt", detail=None)),
-            ), mock.patch(
+            ), mock.patch("backend.app.main.publish_clear_points", new=clear_mock), mock.patch(
                 "backend.app.main.get_aircraft_metadata",
                 new=mock.AsyncMock(
                     return_value=AircraftMetadata(
@@ -122,6 +123,7 @@ class TestApiEndpoints(unittest.TestCase):
                 self.assertEqual(response.json(), {"ok": True})
                 self.assertIsNone(state.selected_hex)
                 self.assertIsNone(state.last_forwarded_signature)
+                clear_mock.assert_awaited_once()
 
     def test_aircraft_signature_changes_when_position_updates(self) -> None:
         self._imports_or_skip()

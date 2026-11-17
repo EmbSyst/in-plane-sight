@@ -269,8 +269,8 @@ class Display:
         else:
             return                              # nichts zu zeigen
 
-        # 2) Punkt-Overlay drueberblenden
-        entries = self._overlay.get(c)
+        # 2) Punkt-Overlay drueberblenden (nicht im Modus AUS -> Globe wirklich dunkel)
+        entries = self._overlay.get(c) if self._mode != 0 else None
         if entries:
             for is_b, off, col in entries:
                 if is_b:

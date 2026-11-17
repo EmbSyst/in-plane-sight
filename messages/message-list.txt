@@ -35,3 +35,9 @@ Werte für points:
     { "id": "DLH123", "lat": 48.35, "lon": 11.78, "color": [255, 0, 0] }
   ]
 }
+
+## Alle Flugzeugpositionen entfernen (clear_points)
+Wird beim Abwählen eines Flugzeugs gesendet.
+{
+  "type": "clear_points"
+}

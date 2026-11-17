@@ -188,6 +188,44 @@ class TestGlobeForwarding(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(fake_client.connect_calls, 1)  # Kein neuer Verbindungsaufbau!
             self.assertEqual(fake_client.publish_calls, 4)
 
+    async def test_live_update_does_not_reset_display_mode(self) -> None:
+        """Live-Updates (switch_to_map=False) senden nur set_points, keinen change_display_mode."""
+        import json
+        from unittest.mock import patch
+
+        globe = self._globe_module_or_skip()
+
+        class _FakeClient:
+            def __init__(self):
+                self.published = []
+
+            def connect_async(self, host, port, keepalive):
+                return 0
+
+            def loop_start(self):
+                return None
+
+            def publish(self, topic, payload, qos, retain):
+                self.published.append(json.loads(payload))
+                return SimpleNamespace(rc=0)
+
+            def loop_stop(self):
+                return None
+
+            def disconnect(self):
+                return None
+
+        fake_client = _FakeClient()
+        os.environ["GLOBE_MODE"] = "mqtt"
+
+        with patch("backend.app.services.globe.mqtt.Client", return_value=fake_client):
+            globe.shutdown_globe_transport()
+            aircraft = SimpleNamespace(hex="abc123", flight="TEST", lat=1.0, lon=2.0, altitude=None, speed=None)
+            result = await globe.forward_to_globe(aircraft, switch_to_map=False)
+
+        self.assertTrue(result.sent)
+        self.assertEqual([m["type"] for m in fake_client.published], ["set_points"])
+
     async def test_change_pwm_publishes_motor_messages(self) -> None:
         """
         Validiert, dass Änderungen an der Motor-PWM-Steuerung korrekt in MQTT-Nachrichten

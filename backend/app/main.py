@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .models import AircraftListResponse, AircraftMetadata, SelectRequest, SelectResponse, DisplayModeRequest, SetPointsRequest, ChangePwmRequest
 from .services.dump1090 import Dump1090Client
-from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport, publish_display_mode, publish_set_points, publish_change_pwm
+from .services.globe import forward_to_globe, init_globe_transport, shutdown_globe_transport, publish_display_mode, publish_set_points, publish_change_pwm, publish_clear_points
 from .services.planespotters import get_aircraft_metadata
 from .services.system_position import get_system_position
 from .state import Dump1090State
@@ -102,7 +102,8 @@ def create_app() -> FastAPI:
                 sleep_s = poll_interval_s
                 if republish_selected is not None:
                     selected, signature = republish_selected
-                    forward_result = await forward_to_globe(selected)
+                    # Nur den Punkt nachziehen, nicht den Anzeigemodus zurück auf die Weltkarte setzen
+                    forward_result = await forward_to_globe(selected, switch_to_map=False)
                     if forward_result.sent:
                         async with state.lock:
                             if state.selected_hex == selected.hex.lower():
@@ -205,11 +206,15 @@ def create_app() -> FastAPI:
 
     @app.post("/api/unselect")
     async def unselect_aircraft() -> dict[str, bool]:
-        """Entfernt die Auswahl des aktuell verfolgten Flugzeugs (stoppt Live-Updates)."""
+        """Entfernt die Auswahl des aktuell verfolgten Flugzeugs (stoppt Live-Updates) und löscht den Punkt am Globe."""
         state: Dump1090State = app.state.dump1090
         async with state.lock:
             state.selected_hex = None
             state.last_forwarded_signature = None
+        # Best effort: die Auswahl ist auch ohne Broker aufgehoben, der Punkt bleibt dann aber am Globe
+        result = await publish_clear_points()
+        if not result.sent:
+            logger.warning("clear_points not sent: %s", result.detail)
         return {"ok": True}
 
     @app.post("/api/globe/mode")
