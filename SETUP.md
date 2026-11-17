@@ -31,6 +31,20 @@ git pull
 ```
 
 
+### 2.1 Neuinstallation (z.B. nach SD-Karten-Defekt)
+
+1. Mit dem Raspberry Pi Imager **Ubuntu Desktop 24.04 LTS (64-bit)** auf eine neue SD-Karte flashen, booten, Benutzer `pi` anlegen und WLAN verbinden.
+2. Repo klonen und Setup-Skript ausführen (als `pi`, **ohne** sudo):
+
+```bash
+git clone https://github.com/EmbSyst/in-plane-sight.git /home/pi/Projekt/backend/in-plane-sight
+cd /home/pi/Projekt/backend/in-plane-sight
+./deploy/setup-pi.sh            # optional: SYSTEM_LAT=... SYSTEM_LON=... ./deploy/setup-pi.sh
+sudo reboot
+```
+
+Das Skript installiert und richtet ein: `dump1090-fa` mit HackRF-Unterstützung (`dump1090.service`, schreibt `/tmp/aircraft.json`), das Backend (`backend.service`), den Autologin auf tty1 sowie Sway + Chromium im Kiosk-Modus.
+
 ## 3. WLAN Konfiguration
 
 Es ist wichtig dass der Raspberry Pi 5 und der Pico 2W eine Verbindung zu einem WLAN-Netzwerk haben. 

@@ -126,9 +126,10 @@ Um das System auf dem Raspberry Pi vollautomatisch beim Hochfahren zu starten, s
 
 **1. Hintergrunddienste (Systemd)**
 
-Ein zentrales Skript startet das FastAPI-Backend im Hintergrund, völlig unabhängig von der Bildschirmausgabe.
-* **Startup-Skript:** `/usr/local/bin/startup.sh`
-* **Systemd-Service:** `/etc/systemd/system/backend.service`
+Alles wird von [`deploy/setup-pi.sh`](deploy/setup-pi.sh) eingerichtet (siehe [SETUP.md](SETUP.md), Abschnitt 2.1).
+* **Backend:** `/etc/systemd/system/backend.service` (führt `start.sh` aus)
+* **ADS-B Decoder:** `/etc/systemd/system/dump1090.service` (`dump1090-fa --device-type hackrf --write-json /tmp`)
+* dump1090: `sudo systemctl status dump1090.service`
 
 Steuern lässt sich der Dienst via Terminal:
 * MQTT-Broker Status prüfen: `sudo systemctl status mosquitto`
