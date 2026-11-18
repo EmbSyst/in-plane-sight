@@ -25,25 +25,55 @@ Das System startet nach dem Einstecken der Stromversorgung automatisch, loggt si
 
 Vor dem ersten Start sollte über den in Punkt 5 beschriebenen Prozess aus dem Kiosk-Modus ausgebrochen werden und im Repo des Projekts einmal der aktuelle Status des Projekts zur Sicherheit gepullt werden.
 
+Da das WLAN des Pi als Hotspot läuft, dafür kurz ins normale WLAN wechseln:
+
 ```bash
+sudo nmcli connection down pico-hotspot
+sudo nmcli device wifi connect MEINE-SSID password MEIN-PASSWORT
 cd /home/hologlobe/Projekt/backend/in-plane-sight
 git pull 
+sudo nmcli connection up pico-hotspot
 ```
 
 
 ### 2.1 Neuinstallation (z.B. nach SD-Karten-Defekt)
 
-1. Mit dem Raspberry Pi Imager **Ubuntu Desktop 24.04 LTS (64-bit)** auf eine neue SD-Karte flashen, booten, Benutzer `hologlobe` (Passwort `hologlobe`) anlegen und WLAN verbinden.
-2. Repo klonen und Setup-Skript ausführen (als `hologlobe`, **ohne** sudo):
+> **Stromversorgung:** Unbedingt das offizielle 27-W-Netzteil des Pi 5 (5,1 V / 5 A) verwenden. Meldungen wie `Undervoltage detected!` in der Konsole bedeuten zu wenig Strom – dann können Chromium oder der HackRF abstürzen.
+
+1. Mit dem Raspberry Pi Imager **Ubuntu Desktop 24.04 LTS (64-bit)** auf eine neue SD-Karte flashen, booten, Benutzer `hologlobe` (Passwort `hologlobe`) anlegen und mit einem **WLAN mit Internet** verbinden.
+2. Terminal öffnen (`Ctrl+Alt+T`) und `git` sowie den SSH-Server installieren (git ist bei Ubuntu Desktop nicht vorinstalliert; das Passwort wird beim Tippen nicht angezeigt):
+
+```bash
+sudo apt update
+sudo apt install -y git openssh-server
+git --version        # zeigt eine Versionsnummer -> git ist installiert
+```
+
+3. Repo klonen und Setup-Skript ausführen (als `hologlobe`, **ohne** sudo, mit Tastatur direkt am Pi – das WLAN wird am Ende zum Hotspot umgestellt, eine SSH-Verbindung über WLAN bricht dabei ab):
 
 ```bash
 git clone https://github.com/EmbSyst/in-plane-sight.git /home/hologlobe/Projekt/backend/in-plane-sight
 cd /home/hologlobe/Projekt/backend/in-plane-sight
-./deploy/setup-pi.sh            # optional: SYSTEM_LAT=... SYSTEM_LON=... ./deploy/setup-pi.sh
-sudo reboot
+./deploy/setup-pi.sh 2>&1 | tee ~/setup.log    # optional: SYSTEM_LAT=... SYSTEM_LON=... davor setzen
 ```
 
-Das Skript installiert und richtet ein: `dump1090-fa` mit HackRF-Unterstützung (`dump1090.service`, schreibt `/tmp/aircraft.json`), das Backend (`backend.service`), den Autologin auf tty1 sowie Sway + Chromium im Kiosk-Modus.
+Am Ende muss `Fertig. Prüfen mit:` erscheinen. Bricht das Skript vorher ab, steht der Grund in den letzten Zeilen: `tail -n 25 ~/setup.log`. Das Skript kann gefahrlos erneut ausgeführt werden. Den Repo-Ordner nach dem Klonen **nicht verschieben** (sonst stimmen die Pfade der Python-Umgebung `.venv` und der Dienste nicht mehr – dann Skript erneut ausführen).
+
+4. **Zwischentest vor dem Neustart** (noch auf dem normalen Desktop):
+
+```bash
+curl -s localhost:8000/api/health     # -> {"status":"ok"}
+snap list chromium                    # Chromium installiert (Ubuntu hat standardmäßig nur Firefox)
+/snap/bin/chromium http://localhost:8000
+```
+
+Erscheint die Oberfläche, funktionieren Backend und Chromium.
+
+5. `sudo reboot` – nach ca. einer Minute erscheint das Frontend im Kiosk-Modus.
+
+Das Skript installiert und richtet ein: `dump1090-fa` mit HackRF-Unterstützung (`dump1090.service`, schreibt `/tmp/aircraft.json`), das Backend (`backend.service`), den lokalen MQTT-Broker (Mosquitto), den WLAN-Hotspot für den Pico, den Autologin auf tty1 sowie Sway + Chromium im Kiosk-Modus. Netzwerkeinstellungen müssen danach nicht von Hand geändert werden.
+
+**Pico:** Danach nur noch die aktuelle `pico/config.py` auf den Pico laden – er verbindet sich dann automatisch mit dem Hotspot des Pi.
 
 ## 3. WLAN Konfiguration
 
@@ -137,6 +167,8 @@ Standardmäßig ist die Weltkarte aktiv und kann durch das Frontend in verschied
 ### Den Kiosk-Modus verlassen
 Wenn du Wartungsarbeiten am System durchführen musst:
 1. Eine physische Tastatur an den Raspberry Pi anschließen.
-2. `Alt + F4` drücken, um Sway zu beenden und in die ungedrehte Textkonsole zu gelangen.
-3. Hier können Befehle ausgeführt oder Logs geprüft werden (z.B. `ifconfig` um IP-Adresse zu überprüfen für eine ssh-Verbindung).
-4. Mit `sudo reboot` startet das System wieder regulär in den Kiosk-Modus.
+2. `Ctrl + Alt + F2` drücken und anmelden – das ist eine Textkonsole neben dem Kiosk. (`Alt + F4` hilft nicht: Sway wird durch den Autologin sofort neu gestartet.)
+3. Hier können Befehle ausgeführt oder Logs geprüft werden (z.B. `journalctl -u backend.service -f`).
+4. Mit `Ctrl + Alt + F1` geht es zurück zum Kiosk. Für längere Wartung den Kiosk mit `sudo systemctl stop getty@tty1` anhalten (`start` startet ihn wieder).
+
+**Alternativ per SSH ohne Tastatur:** Laptop mit dem WLAN `in-plane-sight` (Passwort `planespotter`) verbinden und `ssh hologlobe@10.42.0.1`.
